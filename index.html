@@ -1,826 +1,1190 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Noshigami - Tenman-ya</title>
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>        
-        <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/1.3.8/FileSaver.js"></script>        
-        <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&family=Great+Vibes&display=swap" rel="stylesheet">
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
-        <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
-    </head>
+<html lang="pt-BR"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noshigami - Tenman-ya</title>
 
-    <style>body {
-        font-family: 'Yuji Syuku', sans-serif;
-        background-color: #f2f2f2;
-        display: flex;
+    <!-- Zero bibliotecas de terceiros.
+         jQuery, jQuery UI, docx, html2canvas e Font Awesome nunca eram usados ou
+         foram substituídos por SVG embutido. dom-to-image e FileSaver saíram
+         quando a captura passou a ser desenhada direto em <canvas>: a geração do
+         PNG e o download agora usam só APIs nativas do navegador. O app funciona
+         offline e nenhum código externo roda sobre um formulário com dados
+         pessoais.
+         O único arquivo carregado aqui é a arte de fundo em data URI, necessária
+         para que o canvas não seja bloqueado ao abrir a página sem servidor. -->
+    <script src="assets/fundo-noshigami.js"></script>
+<style>/* Fonte Yuji Syuku (fonts/YujiSyuku-Regular.ttf já existia no projeto, mas nunca era
+   declarada via @font-face — sem isso o navegador sempre caía no fallback 'serif'). */
+@font-face {
+    font-family: 'Yuji Syuku';
+    src: url('fonts/YujiSyuku-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Reset básico e variáveis globais */
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #337ce9 100%);
+    --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --tertiary-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    --bg-light: #f2f2f2;
+    --bg-dark: #1a1a2e;
+    --container-light: rgba(255, 255, 255, 0.95);
+    --container-dark: rgba(22, 22, 40, 0.95);
+    --text-light: #333;
+    --text-dark: #f0f0f0;
+    --input-bg-light: #fff;
+    --input-bg-dark: rgba(255, 255, 255, 0.1);
+    --input-border-dark: rgba(255, 255, 255, 0.2);
+    --required-border-color: #ff6b6b;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Yuji Syuku', serif; /* Syuku é serifada, Arial é sans-serif. Escolha uma base. */
+    background: var(--primary-gradient);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px 0;
+    transition: all 0.3s ease;
+    color: var(--text-light);
+}
+
+body[data-theme="dark"] {
+    background: linear-gradient(135deg, var(--bg-dark) 0%, #16213e 100%);
+    color: var(--text-dark);
+}
+
+/* Container Principal */
+.container {
+    background: var(--container-light);
+    padding: 30px 40px; /* Ajustado padding */
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 100px rgba(102, 126, 234, 0.1);
+    width: 100%; /* Ajustado para melhor responsividade */
+    max-width: 100%; /* Limite máximo */
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden; /* Para o ::before não vazar */
+    animation: fadeIn 0.8s ease-out;
+    margin: 20px;
+}
+
+body[data-theme="dark"] .container {
+    background: var(--container-dark);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.container::before {
+    content: '';
+    position: absolute;
+    top: -2px; left: -2px; right: -2px; bottom: -2px;
+    background: var(--primary-gradient); /* Usando gradiente primário para borda animada */
+    background-size: 400% 400%;
+    border-radius: 20px; /* Mesmo do container */
+    opacity: 0.7;
+    z-index: -1;
+    animation: gradient-animation 5s ease infinite alternate; /* Alterado para 'alternate' e tempo */
+}
+
+@keyframes gradient-animation {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header com controles */
+.header {
+    text-align: center;
+    margin-bottom: 30px; /* Reduzido */
+    position: relative;
+}
+
+.header h1 {
+    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+    font-size: clamp(32px, 5vw, 48px); /* Fonte responsiva */
+    color: var(--text-light);
+    margin: 0 0 10px 0;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+body[data-theme="dark"] .header h1 {
+    color: var(--text-dark);
+}
+
+.header p {
+    color: #555; /* Escurecido um pouco */
+    font-size: clamp(16px, 3vw, 18px); /* Fonte responsiva */
+    margin: 0 0 20px 0; /* Adicionado margin bottom */
+}
+
+body[data-theme="dark"] .header p {
+    color: #bbb; /* Clareado um pouco */
+}
+
+/* Controles do header */
+.header-controls {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    gap: 10px;
+}
+
+.theme-toggle, .help-toggle, .history-toggle {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    /* A regra genérica de 'button' aplica padding 15px 30px. Com box-sizing:
+       border-box isso zera a área de conteúdo de um botão de 40px e o ícone SVG
+       colapsava para largura 0 (o ícone de fonte anterior não colapsava porque
+       glifos transbordam a caixa). */
+    padding: 0;
+    flex: 0 0 auto;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    color: var(--text-light); /* Cor do ícone */
+}
+body[data-theme="dark"] .theme-toggle,
+body[data-theme="dark"] .help-toggle,
+body[data-theme="dark"] .history-toggle {
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--text-dark);
+}
+
+
+.icone {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.icone-sol { display: none; }
+body[data-theme="dark"] .icone-lua { display: none; }
+body[data-theme="dark"] .icone-sol { display: block; }
+
+.theme-toggle:hover, .help-toggle:hover, .history-toggle:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+body[data-theme="dark"] .theme-toggle:hover,
+body[data-theme="dark"] .help-toggle:hover,
+body[data-theme="dark"] .history-toggle:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+
+/* Container principal do formulário */
+#form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 25px; /* Aumentado gap */
+    margin: 30px 0;
+}
+
+/* Linha de formulário */
+.form-row {
+    display: flex;
+    gap: 20px; /* Aumentado gap */
+    justify-content: space-between; /* Melhor distribuição */
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 15px;
+    backdrop-filter: blur(5px);
+    position: relative;
+    transition: background 0.3s ease;
+}
+
+body[data-theme="dark"] .form-row {
+    background: rgba(255, 255, 255, 0.08); /* Mais sutil */
+}
+
+.form-row:hover {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+body[data-theme="dark"] .form-row:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.form-row::before { /* Estilo comum para os títulos das seções */
+    position: absolute;
+    top: -12px; /* Ajustado */
+    left: 20px;
+    color: white;
+    padding: 5px 15px; /* Ajustado */
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.form-row:first-child::before {
+    content: 'Informações em Português';
+    background: var(--primary-gradient);
+}
+
+.form-row:nth-child(2)::before { /* Usando nth-child para o segundo */
+    content: 'Informações em Japonês';
+    background: var(--secondary-gradient);
+}
+
+
+/* Estilos gerais para inputs e selects */
+.input-wrapper {
+    position: relative;
+    display: flex; /* Para alinhar com o tooltip se necessário */
+    flex-direction: column; /* Para tooltip abaixo */
+    flex-grow: 1; /* Para ocupar espaço disponível */
+    min-width: 200px; /* Para não ficarem muito pequenos */
+}
+
+input[type="text"], select {
+    padding: 14px 18px;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    font-size: 16px;
+    font-family: 'Arial', sans-serif; /* Consistência */
+    background: linear-gradient(var(--input-bg-light), var(--input-bg-light)) padding-box,
+                var(--primary-gradient) border-box;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    width: 100%; /* Ocupa todo o wrapper */
+    color: var(--text-light);
+}
+
+body[data-theme="dark"] input[type="text"] {
+    background: linear-gradient(var(--input-bg-dark), var(--input-bg-dark)) padding-box,
+                var(--primary-gradient) border-box;
+    color: var(--text-dark);
+    border-color: var(--input-border-dark);
+}
+body[data-theme="dark"] select {
+    color: var(--text-dark);
+    border-color: var(--input-border-dark);
+}
+
+input[type="text"]:focus, select:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.25);
+    outline: none;
+    border-color: #667eea; /* Destaque no foco */
+}
+body[data-theme="dark"] input[type="text"]:focus,
+body[data-theme="dark"] select:focus {
+    border-color: #89f7fe;
+}
+
+
+input[type="text"]:hover, select:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+}
+
+/* Indicador de campo obrigatório */
+input[type="text"].required:invalid, select.required:invalid,
+input[type="text"].required.error-field, select.required.error-field { /* Adicionada classe error-field para controle via JS */
+    background: linear-gradient(var(--input-bg-light), var(--input-bg-light)) padding-box,
+                linear-gradient(135deg, var(--required-border-color), #ff8787) border-box;
+    border: 2px solid var(--required-border-color);
+}
+body[data-theme="dark"] input[type="text"].required:invalid,
+body[data-theme="dark"] select.required:invalid,
+body[data-theme="dark"] input[type="text"].required.error-field, 
+body[data-theme="dark"] select.required.error-field {
+    background: linear-gradient(var(--input-bg-dark), var(--input-bg-dark)) padding-box,
+                linear-gradient(135deg, var(--required-border-color), #ff8787) border-box;
+    border: 2px solid var(--required-border-color);
+}
+
+
+/* Tooltip */
+.tooltip {
+    position: absolute;
+    top: 100%; /* Abaixo do input */
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85); /* Mais escuro */
+    color: white;
+    padding: 6px 12px; /* Aumentado padding */
+    border-radius: 5px;
+    font-size: 13px; /* Aumentado */
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden; /* Para melhor acessibilidade */
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    margin-top: 8px; /* Espaçamento */
+    z-index: 10;
+}
+
+.input-wrapper:hover .tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Ajustes específicos de largura (mantidos, mas podem ser revistos com flex-grow) */
+#nomeFalecido { min-width: 250px; }
+#nomeFamilia { min-width: 250px; }
+#periodonumeral { min-width: 180px; }
+#periodo { min-width: 200px; }
+#relacao { min-width: 200px; }
+#nomeFamiliaJapones { min-width: 280px; }
+#nomeFalecidoJapones { min-width: 220px; }
+
+/* Estilo para placeholders */
+input::placeholder {
+    color: #aaa; /* Mais suave */
+    font-style: italic;
+    font-size: 15px !important; /* Ajustado */
+    opacity: 0.8; /* Ajustado */
+}
+body[data-theme="dark"] input::placeholder {
+    color: #777;
+}
+
+/* Select customizado.
+   A seta e o preenchimento precisam ficar na MESMA declaração 'background', em
+   camadas. Antes, a regra do tema escuro sobrescrevia só 'background-image':
+   isso descartava as camadas de gradiente e, junto com o shorthand anterior que
+   zerava background-repeat, fazia a seta se repetir lado a lado por toda a
+   largura do campo (a fileira de setas visível no modo noturno). */
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    padding-right: 45px;
+    background:
+        url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>')
+            right 18px center / 18px no-repeat padding-box,
+        linear-gradient(var(--input-bg-light), var(--input-bg-light)) padding-box,
+        var(--primary-gradient) border-box;
+}
+body[data-theme="dark"] select {
+    background:
+        url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2389f7fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>')
+            right 18px center / 18px no-repeat padding-box,
+        linear-gradient(var(--input-bg-dark), var(--input-bg-dark)) padding-box,
+        var(--primary-gradient) border-box;
+}
+
+
+select option {
+    background: var(--input-bg-light);
+    color: var(--text-light);
+}
+
+body[data-theme="dark"] select option {
+    background: var(--bg-dark); /* Fundo mais escuro para options */
+    color: var(--text-dark);
+}
+
+/* Botões */
+.button-group {
+    display: flex;
+    justify-content: center;
+    gap: 20px; /* Aumentado gap */
+    margin-top: 35px; /* Aumentado */
+    flex-wrap: wrap;
+}
+
+button {
+    padding: 15px 30px; /* Aumentado */
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1); /* Sombra sutil */
+}
+
+button::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2); /* Mais sutil no tema claro */
+    transform: translate(-50%, -50%);
+    transition: width 0.5s ease, height 0.5s ease; /* Suavizado */
+    z-index: 0;
+}
+button span, button i { /* Para texto e ícones ficarem acima do ::before */
+    position: relative;
+    z-index: 1;
+}
+
+button:hover::before {
+    width: 250px; /* Ajustado */
+    height: 250px; /* Ajustado */
+}
+
+button:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+#tirar-print {
+    background: var(--primary-gradient);
+    color: white;
+}
+#tirar-print:hover {
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+#ocultar-traducao {
+    background: var(--secondary-gradient);
+    color: white;
+}
+#ocultar-traducao:hover {
+    box-shadow: 0 8px 25px rgba(240, 147, 251, 0.4);
+}
+
+#exportar-txt {
+    background: var(--tertiary-gradient);
+    color: white;
+}
+#exportar-txt:hover {
+    box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4);
+}
+
+#limpar-campos {
+    background: linear-gradient(135deg, #ff6b6b, #ff8787);
+    color: white;
+}
+#limpar-campos:hover {
+    box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
+}
+
+#restaurar-posicoes {
+    background: linear-gradient(135deg, #8e9eab, #5f6d7a);
+    color: white;
+}
+#restaurar-posicoes:hover {
+    box-shadow: 0 8px 25px rgba(95, 109, 122, 0.4);
+}
+
+#capturar-imagem {
+    background: linear-gradient(135deg, #11998e, #38ef7d);
+    color: white;
+}
+#capturar-imagem:hover {
+    box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+}
+
+/* Preview */
+#preview {
+    margin-top: 40px;
+    position: relative;
+    border: 3px dashed rgba(102, 126, 234, 0.3);
+    border-radius: 20px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(240, 240, 255, 0.9));
+    box-shadow: inset 0 0 30px rgba(102, 126, 234, 0.1);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* ---------------------------------------------------------------------------
+   ESPAÇO DE DESIGN FIXO (1794 x 787) + ESCALA PROPORCIONAL
+   ---------------------------------------------------------------------------
+   Antes, cada texto tinha top/left em pixels absolutos e font-size trocado por
+   media query. Como a imagem do noshigami é fluida (largura 100%), os textos
+   ficavam em lugares diferentes em cada resolução: medido no código anterior,
+   o mesmo campo ia de 33% a 51% da largura da peça entre 1920px e 1280px.
+
+   Agora todo o conteúdo é desenhado dentro de um canvas de tamanho FIXO
+   (as mesmas 1794x787 unidades da peça de referência) e esse canvas inteiro é
+   reduzido/ampliado com transform: scale(). Assim a proporção entre texto,
+   imagem e posição é idêntica em qualquer largura de tela. --------------- */
+#noshigami-stage {
+    position: relative;
+    width: 100%;
+    max-width: 1794px;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+#noshigami-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1794px;   /* unidades de design — nunca muda */
+    height: 787px;   /* unidades de design — nunca muda */
+    transform-origin: top left;
+    background: #fff;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+body[data-theme="dark"] #preview {
+    background: linear-gradient(135deg, rgba(30, 30, 50, 0.9), rgba(40, 40, 60, 0.9));
+    border-color: rgba(102, 126, 234, 0.2);
+}
+
+#preview:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: inset 0 0 40px rgba(102, 126, 234, 0.15);
+}
+
+#imagemPreview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: fill; /* o canvas já tem a proporção exata da arte (2.2807) */
+    pointer-events: none;
+    -webkit-user-drag: none;
+    user-select: none;
+}
+
+/* Texto fixo e containers de texto.
+   Todas as medidas abaixo estão em unidades de design (o canvas 1794x787) e são
+   escaladas junto com ele — por isso não existe mais nenhum font-size por
+   breakpoint. A posição inicial de cada bloco fica em POSICOES_PADRAO, no
+   script.js, e é aplicada sempre que a página carrega. */
+#texto-fixo {
+    position: absolute;
+    color: #2d3748;
+    cursor: move;
+    padding: 10px;
+    white-space: pre-line;
+    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+    font-size: 25px;
+    width: 800px;
+    text-align: center;
+    line-height: 1.35;
+    border-radius: 10px;
+    user-select: none;
+    z-index: 5;
+}
+
+.text-container {
+    position: absolute;
+    font-family: 'Yuji Syuku', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+    color: #1c212b;
+    font-weight: 600;
+    cursor: move;
+    user-select: none;
+    padding: 5px;
+    z-index: 5;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    white-space: nowrap; /* mantém a coluna vertical única, sem quebrar em duas */
+    width: auto;
+    height: auto;
+}
+
+/* A peça de noshigami é sempre papel branco: o texto impresso nela precisa
+   permanecer escuro mesmo com a interface em modo noturno. Antes o tema escuro
+   pintava esses textos de branco (#f0f0f0), deixando-os ilegíveis sobre o
+   papel — era o erro visível no modo noturno. */
+body[data-theme="dark"] #texto-fixo { color: #2d3748; }
+body[data-theme="dark"] .text-container { color: #1c212b; }
+
+.draggable.dragging,
+.text-container.dragging {
+    opacity: 0.75;
+    cursor: grabbing;
+    outline: 1px dashed #667eea;
+    outline-offset: 2px;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    position: fixed;
+    top: 0; left: 0; /* Alterado para cobrir tela inteira */
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.5); /* Fundo semi-transparente */
+    display: none; /* Inicialmente oculto */
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+.loading-spinner.show { /* Classe para mostrar */
+    display: flex;
+}
+
+.spinner {
+    width: 60px; /* Aumentado */
+    height: 60px; /* Aumentado */
+    border: 6px solid rgba(102, 126, 234, 0.3); /* Aumentado */
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite; /* Mais rápido */
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Feedback Messages */
+.feedback-message {
+    position: fixed;
+    top: 20px;
+    left: 50%; /* Centralizado */
+    transform: translateX(-50%) translateY(-100px); /* Inicialmente fora da tela e centralizado */
+    padding: 15px 25px;
+    border-radius: 10px;
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+    transition: transform 0.4s ease-in-out; /* Transição mais suave */
+    z-index: 10000; /* Acima de tudo */
+    text-align: center;
+}
+
+.feedback-message.show {
+    transform: translateX(-50%) translateY(0); /* Desliza para a posição */
+}
+
+.feedback-message.success {
+    background: linear-gradient(135deg, #00b09b, #96c93d);
+}
+
+.feedback-message.error {
+    background: linear-gradient(135deg, #ff5252, #ff7b7b); /* Cor de erro mais viva */
+}
+.feedback-message.info {
+    background: linear-gradient(135deg, #4facfe, #00f2fe); /* Para informações gerais */
+}
+
+
+/* Help Modal */
+.help-modal {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.7); /* Mais escuro */
+    display: none; /* Controlado por JS */
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    padding: 20px; /* Espaçamento para telas menores */
+}
+.help-modal.show { /* Classe para mostrar */
+    display: flex;
+}
+
+.help-content {
+    background: var(--container-light);
+    padding: 30px 40px; /* Ajustado */
+    border-radius: 15px; /* Suavizado */
+    max-width: 650px; /* Aumentado */
+    width: 90%;
+    max-height: 85vh; /* Aumentado */
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    color: var(--text-light);
+}
+
+body[data-theme="dark"] .help-content {
+    background: var(--bg-dark); /* Ajustado para tema escuro */
+    color: var(--text-dark);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.help-close {
+    position: absolute;
+    top: 15px; right: 20px; /* Ajustado */
+    background: transparent; /* Transparente */
+    border: none;
+    font-size: 28px; /* Aumentado */
+    font-weight: bold;
+    cursor: pointer;
+    color: #888; /* Suavizado */
+    padding: 5px;
+    line-height: 1;
+}
+.help-close:hover {
+    color: var(--required-border-color); /* Cor de destaque no hover */
+}
+body[data-theme="dark"] .help-close {
+    color: #aaa;
+}
+body[data-theme="dark"] .help-close:hover {
+    color: #ff8787;
+}
+
+.help-content h2 {
+    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+    font-size: 28px;
+    margin-bottom: 10px;
+    color: var(--primary-gradient); /* Usar cor primária */
+}
+body[data-theme="dark"] .help-content h2 {
+     background-image: var(--primary-gradient); /* Cor do texto com gradiente */
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.help-content hr {
+    margin: 15px 0;
+    border: 0;
+    border-top: 1px solid #eee;
+}
+body[data-theme="dark"] .help-content hr {
+    border-top-color: rgba(255,255,255,0.1);
+}
+.help-content h3 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-size: 18px;
+    color: #444;
+}
+body[data-theme="dark"] .help-content h3 {
+    color: #ccc;
+}
+.help-content ol, .help-content ul {
+    margin-left: 20px;
+    line-height: 1.8; /* Melhor legibilidade */
+}
+.help-content kbd {
+    background-color: #e0e0e0;
+    border-radius: 3px;
+    border: 1px solid #c0c0c0;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.2), inset 0 2px 0 #fff;
+    color: #333;
+    display: inline-block;
+    font-family: monospace;
+    font-size: 0.85em;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    white-space: nowrap;
+}
+body[data-theme="dark"] .help-content kbd {
+    background-color: #444;
+    border-color: #666;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.3), inset 0 2px 0 #555;
+    color: #eee;
+}
+
+/* History Panel */
+.history-panel {
+    position: fixed;
+    right: -400px; /* Aumentado para garantir que está fora da tela */
+    top: 0;
+    width: 380px; /* Aumentado */
+    height: 100%;
+    background: var(--container-light);
+    box-shadow: -8px 0 25px rgba(0, 0, 0, 0.15); /* Sombra mais pronunciada */
+    transition: right 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); /* Transição mais suave */
+    z-index: 9500; /* Abaixo de modais e feedback */
+    overflow-y: auto;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+}
+
+body[data-theme="dark"] .history-panel {
+    background: var(--bg-dark); /* Ajustado */
+    box-shadow: -8px 0 25px rgba(0, 0, 0, 0.3);
+    border-left: 1px solid rgba(255,255,255,0.1);
+}
+
+.history-panel.open {
+    right: 0;
+}
+
+.history-panel h3 {
+    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+    font-size: 24px;
+    margin-bottom: 20px;
+    text-align: center;
+    color: var(--text-light);
+}
+body[data-theme="dark"] .history-panel h3 {
+    color: var(--text-dark);
+}
+
+
+#historyList {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.history-item {
+    padding: 15px;
+    margin-bottom: 12px;
+    background: #f9f9f9; /* Fundo mais claro */
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out; /* Transição mais rápida */
+    border: 1px solid #eee;
+}
+
+body[data-theme="dark"] .history-item {
+    background: rgba(255, 255, 255, 0.05); /* Sutil */
+    border-color: rgba(255,255,255,0.1);
+}
+
+.history-item:hover {
+    background: #efefff; /* Leve destaque roxo */
+    transform: translateX(-5px) scale(1.02); /* Efeito de zoom e deslocamento */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+body[data-theme="dark"] .history-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+
+.history-item strong {
+    font-size: 1.1em;
+    color: var(--primary-gradient); /* Usando cor primária */
+}
+body[data-theme="dark"] .history-item strong {
+    background-image: var(--primary-gradient); /* Cor do texto com gradiente */
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.history-item small {
+    display: block;
+    font-size: 0.9em;
+    color: #777;
+    margin-top: 5px;
+}
+body[data-theme="dark"] .history-item small {
+    color: #aaa;
+}
+.history-item small.timestamp { /* Estilo específico para o timestamp */
+    color: #aaa;
+    font-style: italic;
+    font-size: 0.8em;
+}
+body[data-theme="dark"] .history-item small.timestamp {
+    color: #888;
+}
+
+.history-close-btn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background: var(--secondary-gradient);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+.history-close-btn:hover {
+    opacity: 0.9;
+}
+
+
+/* Media Queries Genéricas */
+@media (max-width: 992px) { /* Tablets e abaixo */
+    .form-row {
         flex-direction: column;
-        align-items: center;
-        min-height: 100vh;
+        align-items: stretch; /* Inputs ocupam largura total */
+        gap: 15px;
     }
-    
-    
-    body {
-        font-family: 'Great Vibes', cursive;
+    .input-wrapper {
+        min-width: 100%; /* Ocupa toda a largura na coluna */
     }
-    
-    .container {
-        background-color: #fff;
-        padding: 30px;
-        border-radius: 10px;
-        box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-        text-align: center;
-    }
-    
-    h1 {
-        color: #333;
-    }
-    
-    #form-container {
-        display: flex;
-        flex-direction: row;
-        gap: 7px;
-        max-width: 400px;
-        margin: 20px auto;
-        flex-wrap: nowrap;
+    .header-controls {
+        position: static; /* Volta ao fluxo normal */
         justify-content: center;
-    }
-    
-    
-    #nomeFalecido {
-        width: 100%;
-        /* Largura total do contêiner */
-        padding: 12px 15px;
-        /* Espaçamento interno */
-        margin: 15px 0;
-        /* Margem entre os campos */
-        border: 2px solid #ccc;
-        /* Borda clara e espessa */
-        border-radius: 8px;
-        /* Cantos arredondados */
-        font-size: 18px;
-        /* Texto maior e mais legível */
-        font-family: 'Arial', sans-serif;
-        /* Tipografia limpa e moderna */
-        background-color: #f9f9f9;
-        /* Fundo claro */
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        /* Sombra leve */
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        /* Animação */
-    }
-    
-    /* Efeito de foco no campo nomeFalecido */
-    #nomeFalecido:focus {
-        border-color: #007BFF;
-        /* Azul vibrante ao focar */
-        background-color: #ffffff;
-        /* Fundo branco para destaque */
-        box-shadow: 0 6px 10px rgba(0, 123, 255, 0.2);
-        /* Sombra mais forte */
-        outline: none;
-        /* Remove contorno padrão */
-    }
-    
-    /* Adiciona um placeholder estilizado */
-    #nomeFalecido::placeholder {
-        color: #888;
-        /* Cor do texto do placeholder */
-        font-style: italic;
-        /* Texto em itálico */
-    }
-    
-    #nomeFamilia {
-        width: 100%;
-        /* Largura total do contêiner */
-        padding: 12px 15px;
-        /* Espaçamento interno */
-        margin: 15px 0;
-        /* Margem entre os campos */
-        border: 2px solid #ccc;
-        /* Borda clara e espessa */
-        border-radius: 8px;
-        /* Cantos arredondados */
-        font-size: 18px;
-        /* Texto maior e mais legível */
-        font-family: 'Arial', sans-serif;
-        /* Tipografia limpa e moderna */
-        background-color: #f9f9f9;
-        /* Fundo claro */
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        /* Sombra leve */
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        /* Animação */
-        text-align: -webkit-center;
-    }
-    
-    /* Efeito de foco no campo nomeFalecido */
-    #nomeFamilia:focus {
-        border-color: #007BFF;
-        /* Azul vibrante ao focar */
-        background-color: #ffffff;
-        /* Fundo branco para destaque */
-        box-shadow: 0 6px 10px rgba(0, 123, 255, 0.2);
-        /* Sombra mais forte */
-        outline: none;
-        /* Remove contorno padrão */
-        text-align: -webkit-center;
-    }
-    
-    /* Adiciona um placeholder estilizado */
-    #nomeFamilia:placeholder {
-        color: #888;
-        /* Cor do texto do placeholder */
-        font-style: italic;
-        /* Texto em itálico */
-    }
-    
-    #nomeFalecidoJapones {
-        width: 152px;
-        /* Largura total do contêiner */
-        padding: 12px 15px;
-        /* Espaçamento interno */
-        margin: 15px 0;
-        /* Margem entre os campos */
-        border: 2px solid #ccc;
-        /* Borda clara e espessa */
-        border-radius: 8px;
-        /* Cantos arredondados */
-        font-size: 18px;
-        /* Texto maior e mais legível */
-        font-family: 'Arial', sans-serif;
-        /* Tipografia limpa e moderna */
-        background-color: #f9f9f9;
-        /* Fundo claro */
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        /* Sombra leve */
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        /* Animação */
-        text-align: -webkit-center;
-    }
-    
-    
-    /* Efeito de foco no campo nomeFalecido */
-    #nomeFalecidoJapones:focus {
-        border-color: #007BFF;
-        /* Azul vibrante ao focar */
-        background-color: #ffffff;
-        /* Fundo branco para destaque */
-        box-shadow: 0 6px 10px rgba(0, 123, 255, 0.2);
-        /* Sombra mais forte */
-        outline: none;
-        /* Remove contorno padrão */
-    }
-    
-    /* Adiciona um placeholder estilizado */
-    #nomeFalecidoJapones:placeholder {
-        color: #888;
-        /* Cor do texto do placeholder */
-        font-style: italic;
-        /* Texto em itálico */
-    }
-    
-    #nomeFamiliaJapones {
-        width: 192px;
-        /* Largura total do contêiner */
-        padding: 12px 15px;
-        /* Espaçamento interno */
-        margin: 15px 0;
-        /* Margem entre os campos */
-        border: 2px solid #ccc;
-        /* Borda clara e espessa */
-        border-radius: 8px;
-        /* Cantos arredondados */
-        font-size: 22px;
-        /* Texto maior e mais legível */
-        font-family: 'Arial', sans-serif;
-        /* Tipografia limpa e moderna */
-        background-color: #f9f9f9;
-        /* Fundo claro */
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        /* Sombra leve */
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        /* Animação */
-        text-align: -webkit-center;
-    }
-    
-    /* Efeito de foco no campo nomeFalecido */
-    #nomeFamiliaJapones:focus {
-        border-color: #007BFF;
-        /* Azul vibrante ao focar */
-        background-color: #ffffff;
-        /* Fundo branco para destaque */
-        box-shadow: 0 6px 10px rgba(0, 123, 255, 0.2);
-        /* Sombra mais forte */
-        outline: none;
-        /* Remove contorno padrão */
-    }
-    
-    /* Adiciona um placeholder estilizado */
-    #nomeFamiliaJapones:placeholder {
-        color: #888;
-        /* Cor do texto do placeholder */
-        font-style: italic;
-        /* Texto em itálico */
-    }
-    
-    #nomeFalecidoJapones:hover {
-        box-shadow: 3px 21px 46px #273287;
-    }
-    
-    #nomeFalecido:hover {
-        box-shadow: 3px 21px 46px #273287;
-    }
-    
-    #nomeFamiliaJapones:hover {
-        box-shadow: 3px 21px 46px #273287;
-    }
-    
-    #nomeFamilia:hover {
-        box-shadow: 3px 21px 46px #273287;
-    }
-    
-    select {
-        appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>') no-repeat right 10px center;
-        background-size: 16px 16px;
-        width: auto;
-        /* Largura total */
-        padding: 12px 15px;
-        /* Espaçamento interno */
-        margin: 15px 0;
-        /* Margem entre os campos */
-        border: 2px solid #ccc;
-        /* Borda clara */
-        border-radius: 8px;
-        /* Cantos arredondados */
-        font-size: 18px;
-        /* Tamanho do texto */
-        font-family: 'Arial', sans-serif;
-        /* Tipografia moderna */
-        background-color: #f9f9f9;
-        /* Fundo claro */
-        color: #333;
-        /* Cor do texto */
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        /* Sombra leve */
-        appearance: none;
-        /* Remove a aparência padrão do navegador */
-        background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
-        background-repeat: no-repeat;
-        background-position: right 15px center;
-        /* Ícone de seta personalizado */
-        background-size: 16px;
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        /* Transição suave */
-        cursor: pointer;
-        /* Cursor de ponteiro */
-    }
-    
-    select:focus {
-        border-color: #007BFF;
-        /* Azul vibrante ao focar */
-        background-color: #ffffff;
-        /* Fundo branco */
-        box-shadow: 3px 21px 46px #676ecf;
-        /* Sombra mais forte */
-        outline: none;
-        /* Remove o contorno padrão */
-    }
-    
-    select:hover {
-        box-shadow: 3px 21px 46px #676ecf;
-    }
-    
-    select option[value=""][disabled] {
-        color: #6f9fb6;
-        /* Cor mais clara */
-        font-style: italic;
-        /* Texto em itálico */
-    }
-    
-    .button-group {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
         margin-top: 20px;
+        margin-bottom: 10px; /* Adicionado para espaçamento */
     }
-    
-    
-    #download-pdf,
-    #imprimir-texto {
-        background-color: #4CAF50;
-        color: white;
-        padding: 12px 20px;
-        border: none;
-        border-radius: 5px;
-        font-size: 18px;
-        cursor: pointer;
-        transition: background-color 0.3s;
-    }
-    
-    #download-pdf:hover,
-    #imprimir-texto:hover {
-        background-color: #3e8e41;
-    }
-    
-    button#tirar-print {
-        background-color: #445ce2;
-        color: white;
-        padding: 12px 20px;
-        border: none;
-        border-radius: 5px;
-        font-size: 18px;
-        cursor: pointer;
-        transition: background-color 0.3s;
-    }
-    
-    button#tirar-print:hover {
-        background-color: #222dc2;
-    }
-    
-    button#ocultar-traducao {
-        background-color: #0b7280;
-        color: white;
-        padding: 12px 20px;
-        border: none;
-        border-radius: 5px;
-        font-size: 18px;
-        cursor: pointer;
-        transition: background-color 0.3s;
-    }
-    
-    button#ocultar-traducao:hover {
-        background-color: #04464e;
-    }
-    
-    #preview {
-        margin-top: 30px;
-        position: relative;
-        display: flex;
-        justify-content: center;
-        border: 2px dashed #ccc;
-        padding: 20px;
-        background-color: #f9f9f9;
-    }
-    
-    #imagemPreview {
-        width: 100%;
-    }
-    
-    @media screen and (min-width: 1024px) and (max-width: 1280px) {
-    
-        div#texto-fixo {
-            position: absolute;
-            top: 457.5px;
-            left: 601.188px;
-            transform: translate(-50%, -50%);
-            color: #000;
-            cursor: move;
-            padding: 2px;
-            transform-origin: center;
-            white-space: pre-line;
-            font-family: 'Great Vibes';
-            font-size: 34px;
-            width: 700px;
-        }
-    
-        div#nomeFalecidoJapones-container {
-            top: 117px !important;
-            left: 570.844px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#relacao-container {
-            top: 30px !important;
-            left: 573.844px !important;
-            font-size: 27px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#missa-container {
-            top: 60px !important;
-            left: 449px !important;
-            font-size: 32px;
-            font-weight: 700;
-            width: 163px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#nomeFamiliaJapones-container {
-            left: 446px !important;
-            top: 324px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 164px;
-            writing-mode: vertical-rl;
-        }
-    }
-    
-    @media screen and (min-width: 1367px) {
-        div#texto-fixo {
-            position: absolute;
-            top: 699.5px;
-            left: 933.188px;
-            transform: translate(-50%, -50%);
-            color: #000;
-            cursor: move;
-            padding: 2px;
-            transform-origin: center;
-            white-space: pre-line;
-            font-family: 'Great Vibes';
-            font-size: 34px;
-            width: 700px;
-            bottom: -36px;
-        }
-    
-        div#nomeFalecidoJapones-container {
-            top: 241px !important;
-            left: 913.844px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#relacao-container {
-            top: 155px !important;
-            left: 911.844px !important;
-            font-size: 27px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#missa-container {
-            top: 155px !important;
-            left: 773px !important;
-            font-size: 32px;
-            font-weight: 700;
-            width: 163px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#nomeFamiliaJapones-container {
-            left: 774px !important;
-            top: 536px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 164px;
-            writing-mode: vertical-rl;
-        }
-    }
-    
-    @media screen and (min-width: 1281px) and (max-width: 1366px) {
-        div#texto-fixo {
-            position: absolute;
-            top: 497.5px;
-            left: 643.188px;
-            transform: translate(-50%, -50%);
-            color: #000;
-            cursor: move;
-            padding: 2px;
-            transform-origin: center;
-            white-space: pre-line;
-            font-family: 'Great Vibes';
-            font-size: 34px;
-            width: 700px;
-            bottom: -67px;
-        }
-    
-        div#nomeFalecidoJapones-container {
-            top: 140px !important;
-            left: 618.844px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#relacao-container {
-            top: 53px !important;
-            left: 621.844px !important;
-            font-size: 27px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#missa-container {
-            top: 100px !important;
-            left: 495px !important;
-            font-size: 32px;
-            font-weight: 700;
-            width: 163px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#nomeFamiliaJapones-container {
-            left: 499px !important;
-            top: 349px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 164px;
-            writing-mode: vertical-rl;
-        }
-    }
-    
-    @media screen and (min-width: 1440px) and (max-width: 1440px) and (min-height: 869px) and (max-height: 869px) {
-    
-        div#texto-fixo {
-            position: absolute;
-            top: 600px;
-            left: 720px;
-            transform: translate(-50%, -50%);
-            color: #000;
-            cursor: move;
-            padding: 2px;
-            transform-origin: center;
-            white-space: pre-line;
-            font-family: 'Great Vibes';
-            font-size: 34px;
-            width: 700px;
-            bottom: -50px;
-        }
-    
-        div#nomeFalecidoJapones-container {
-            top: 220px !important;
-            left: 720px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#relacao-container {
-            top: 120px !important;
-            left: 720px !important;
-            font-size: 27px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#missa-container {
-            top: 160px !important;
-            left: 580px !important;
-            font-size: 32px;
-            font-weight: 700;
-            width: 163px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#nomeFamiliaJapones-container {
-            left: 580px !important;
-            top: 450px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 164px;
-            writing-mode: vertical-rl;
-        }
-    }
-    
-    @media screen and (min-width: 1440px) and (max-width: 1440px) and (min-height: 869px) and (max-height: 869px) {
-    
-        div#texto-fixo {
-            position: absolute;
-            top: 516px;
-            left: 693px;
-            transform: translate(-50%, -50%);
-            color: #000;
-            cursor: move;
-            padding: 2px;
-            transform-origin: center;
-            white-space: pre-line;
-            font-family: 'Great Vibes';
-            font-size: 34px;
-            width: 700px;
-            bottom: -50px;
-        }
-    
-        div#nomeFalecidoJapones-container {
-            top: 130px !important;
-            left: 668px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#relacao-container {
-            top: 42px !important;
-            left: 671px !important;
-            font-size: 27px;
-            font-weight: 700;
-            width: 75px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#missa-container {
-            top: 88px !important;
-            left: 537px !important;
-            font-size: 32px;
-            font-weight: 700;
-            width: 163px;
-            writing-mode: vertical-rl;
-        }
-    
-        div#nomeFamiliaJapones-container {
-            left: 536px !important;
-            top: 357px !important;
-            font-size: 25px;
-            font-weight: 700;
-            width: 164px;
-            writing-mode: vertical-rl;
-        }
-    }
-    
-    
-    .text-container {
-        position: absolute;
-        /* Para facilitar o posicionamento dinâmico */
-        font-family: 'Yuji Syuku', 'Great Vibes', cursive;
-    }
-    
-    /* Exemplo de posicionamento para os blocos de texto */
-    #missa-container {
-        top: 50px;
-        left: 100px;
-    }
-    
-    #nomeFalecido-container {
-        top: 100px;
-        left: 100px;
-    }
-    
-    #nomeFalecidoJapones-container {
-        top: 150px;
-        left: 100px;
-    }
-    
-    #relacao-container {
-        top: 200px;
-        left: 100px;
-    }
-    
-    #nomeFamilia-container {
-        top: 250px;
-        left: 100px;
-    }
-    
-    #nomeFamiliaJapones-container {
-        top: 300px;
-        left: 100px;
-    }
-    
-    #nomeFalecido {
-        width: 139px;
-        text-align-last: center;
-    }
-    
-    #nomeFamilia {
-        width: 140px;
-    }
-    
-    select#periodo {
-        width: 125px;
-    }
-    
-    select#relacao {
-        width: 143px;
-    }
-    
-    input::placeholder {
-        font-size: 14px !important;
-    }
-    
-    
-    </style>
+}
 
-    <body>
-        <div class="container">
-    
-            <div id="form-container">
-                <input type="text" id="nomeFalecido" placeholder="Nome" />
-                <select id="periodonumeral">
-                    <option value="">Missa Numeral</option>
-                    <option value="7º dia">7º dia</option> 
-                    <option value="14º dia">14º dia</option>
-                    <option value="21º dia">21º dia</option>
-                    <option value="28º dia">28º dia</option>
-                    <option value="35º dia">35º dia</option>
-                    <option value="42º dia">42º dia</option>
-                    <option value="49º dia">49º dia</option>
-                    <option value="100º dia">100º dia</option>
-                    <option value="1 ano">1 ano</option>
-                    <option value="3 anos">3 anos</option>
-                    <option value="7 anos">7 anos</option>
-                    <option value="13 anos">13 anos</option>
-                    <option value="17 anos">17 anos</option>
-                    <option value="23 anos">23 anos</option>
-                    <option value="27 anos">27 anos</option>
-                    <option value="33 anos">33 anos</option>
-                    <option value="50 anos">50 anos</option>
-                </select>
-                <select id="periodo">
-                    <option value="">Missa de</option>
-                    <option value="初七日">7° dia : 初七日</option>
-                    <option value="二七日">14° dia 二七日</option>
-                    <option value="三七日">21° dia 三七日</option>
-                    <option value="四七日">28° dia 四七日</option>
-                    <option value="五七日">35° dia 五七日</option>
-                    <option value="六七日">42° dia 六七日</option>
-                    <option value="四十九日">49° dia 四十九日</option>
-                    <option value="百箇日">100° dia 百箇日</option>
-                    <option value="一周忌">1 ano: 一周忌</option>
-                    <option value="三回忌">3 anos: 三回忌</option>
-                    <option value="七回忌">7 anos: 七回忌</option>
-                    <option value="十三回忌">13 anos: 十三回忌</option>
-                    <option value="十七回忌">17 anos: 十七回忌</option>
-                    <option value="二十三回忌">23 anos: 二十三回忌</option>
-                    <option value="二十七回忌">27 anos: 二十七回忌</option>
-                    <option value="三十三回忌">33 anos: 三十三回忌</option>
-                    <option value="五十回忌">50 anos: 五十回忌</option>
-                </select>
-                <select id="relacao">
-                    <option value="">Parentesco</option>
-                    <option value="ご父">pai - ご父</option>
-                    <option value="お母">mãe - お母</option>
-                    <option value="ご祖父">avô - ご祖父</option>
-                    <option value="ご祖母">avó - ご祖母</option>
-                    <option value="ご妻">esposa - ご妻</option>
-                    <option value="ご主人">marido - ご主人</option>
-                    <option value="ご岳父">sogro - ご岳父</option>
-                    <option value="ご岳母">sogra - ご岳母</option>
-                    <option value="ご嫁">nora - ご嫁</option>
-                    <option value="ご婿">genro - ご婿</option>
-                    <option value="ご長男">filho - ご長男</option>
-                    <option value="ご長女">filha - ご長女</option>
-                    <option value="ご兄">irmão - ご兄</option>
-                    <option value="ご姉">irmã - ご姉</option>
-                </select>
-                <input type="text" id="nomeFamilia" placeholder="Nome da Família" />
-                <input type="text" id="nomeFamiliaJapones" placeholder="Nome da Família em Japonês" />
-                <input type="text" id="nomeFalecidoJapones" placeholder="Nome em Japonês" />
+@media (max-width: 768px) { /* Mobile */
+    .container {
+        padding: 20px;
+        margin: 10px;
+        width: calc(100% - 20px); /* Ocupa quase toda tela */
+    }
+
+    .header h1 {
+        font-size: 28px;
+    }
+    .header p {
+        font-size: 14px;
+    }
+
+    .button-group {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    button {
+        width: 100%;
+        padding: 12px 20px; /* Ajustado */
+        font-size: 15px;
+    }
+
+    .history-panel {
+        width: 90%; /* Painel de histórico mais largo em mobile */
+        right: -100%; /* Garante que está fora */
+    }
+    .history-panel.open {
+        right: 0;
+        width: 100%; /* Ocupa tela toda quando aberto */
+    }
+
+    .help-modal .help-content {
+        padding: 20px;
+    }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Tamanhos de fonte dos blocos, em unidades de design.
+   Um único valor por bloco: a redução para telas menores é feita pela escala do
+   canvas, não por media query. Os quatro blocos de @media que existiam aqui
+   (1024-1280, 1281-1366, 1367-1440, >=1441) definiam font-size conflitante para
+   os mesmos elementos e foram removidos.
+   --------------------------------------------------------------------------- */
+#missa-container                 { font-size: 35px; font-weight: 700; }
+#relacao-container               { font-size: 30px; font-weight: 700; }
+#nomeFalecidoJapones-container   { font-size: 28px; font-weight: 700; }
+#nomeFamiliaJapones-container    { font-size: 28px; font-weight: 700; }
+</style></head>
+
+
+
+<body data-theme="light">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="feedback-message info" id="feedbackMessage">Tradução exibida.</div>
+
+    <div class="help-modal" id="helpModal">
+        <div class="help-content">
+            <button class="help-close" onclick="toggleHelp()">×</button>
+            <h2>📖 Como usar o Noshigami</h2>
+            <hr>
+            <h3>🎯 Passos Básicos:</h3>
+            <ol>
+                <li><strong>Preencha os campos obrigatórios</strong> (marcados em vermelho)</li>
+                <li><strong>Visualize</strong> o resultado no preview abaixo</li>
+                <li><strong>Salve</strong> a imagem clicando em "Salvar Noshigami"</li>
+            </ol>
+            <h3>⌨️ Atalhos de Teclado:</h3>
+            <ul>
+                <li><kbd>Tab</kbd> - Navegar entre campos</li>
+                <li><kbd>Ctrl + S</kbd> - Salvar imagem</li>
+                <li><kbd>Esc</kbd> - Ocultar/Mostrar tradução</li>
+                <li><kbd>Ctrl + L</kbd> - Limpar todos os campos</li>
+            </ul>
+            <h3>💡 Dicas:</h3>
+            <ul>
+                <li>O <strong>histórico</strong> salva suas últimas 10 entradas</li>
+                <li>Exporte os dados em TXT após finalizado</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="history-panel" id="historyPanel">
+        <h3>Histórico de Entradas</h3>
+        <!-- Conteúdo gerado dinamicamente por updateHistoryDisplay() em script.js.
+             (Antes havia 4 itens de teste fixos no HTML — dados de debug que nunca deveriam
+             ter ido para produção; removidos.) -->
+        <div id="historyList"></div>
+        <button class="history-close-btn" onclick="toggleHistory()">Fechar</button>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            
+            
+            <h1>Noshigami</h1>
+            <p>Tenman-ya</p><div class="header-controls">
+                <!-- Ícones em SVG embutido, no lugar do Font Awesome via CDN: elimina
+                     ~90 KB de CSS mais os arquivos de fonte baixados a cada visita e
+                     garante que os botões nunca fiquem vazios sem internet.
+                     A troca lua/sol é feita por CSS, conforme o tema ativo. -->
+                <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema">
+                    <svg class="icone icone-lua" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    <svg class="icone icone-sol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 1.6v3M12 19.4v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1.6 12h3M19.4 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+                </button>
+                <button class="help-toggle" onclick="toggleHelp()" title="Ajuda" aria-label="Ajuda">
+                    <svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 9a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.6-2.8 4.4"/><circle cx="12" cy="18" r="1.1" fill="currentColor" stroke="none"/></svg>
+                </button>
+                <button class="history-toggle" onclick="toggleHistory()" title="Histórico" aria-label="Histórico">
+                    <svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.2 12a8.8 8.8 0 1 0 2.6-6.2"/><path d="M3 4.2V9h4.8"/><path d="M12 7.6V12l3.2 1.9"/></svg>
+                </button>
             </div>
-    
-            <div class="button-group">
-                <button id="tirar-print">Realizar Download</button>
-                <button id="ocultar-traducao">Ocultar Texto</button>
-            </div>
-                      
-            
-            <div id="preview">
-                <img id="imagemPreview" src="https://i.ibb.co/7XXLP89/Noshigami-Okaeshi-LOGO-NOVO-36-5cm-x-16cm.jpg" alt="Imagem Pré-visualização" />
-                
-                <!-- Texto-Fixo -->
-                <div id="texto-fixo">
-                    Missa de <span id="periodoPreviewNumeral"></span> de <span id="nomeFalecidoPreview"></span>.
-                    A Família <span id="nomeFamiliaPreview"></span> agradece as condolências recebidas
+        </div>
+
+        <div id="form-container">
+            <div class="form-row">
+                <div class="input-wrapper">
+                    <input type="text" id="nomeFalecido" placeholder="Nome do Falecido(a)" class="required">
+                    <span class="tooltip">Nome completo do falecido (obrigatório)</span>
                 </div>
-                
-                <!-- Missa -->
-                <div id="missa-container" class="text-container">
-                     <span id="periodoPreview"></span> <span id="periodoPreviewNumeral"></span>
+                 <div class="input-wrapper">
+                    <input type="text" id="nomeFamilia" placeholder="Nome da Família" class="required">
+                    <span class="tooltip">Nome da família (obrigatório)</span>
                 </div>
-            
-                <!-- Nome do Falecido -->
-                <div id="nomeFalecido-container" class="text-container">
-                     <span id="nomeFalecidoPreview"></span>
-                </div>
-            
-                <!-- Nome do Falecido em Japonês -->
-                <div id="nomeFalecidoJapones-container" class="text-container">
-                     <span id="nomeFalecidoJaponesPreview"></span>
-                </div>
-            
-                <!-- Relação (Parentesco) -->
-                <div id="relacao-container" class="text-container">
-                     <span id="relacaoPreview"></span>
-                </div>
-            
-                <!-- Nome da Família -->
-                <div id="nomeFamilia-container" class="text-container">
-                     <span id="nomeFamiliaPreview"></span>
-                </div>
-            
-                <!-- Nome da Família em Japonês -->
-                <div id="nomeFamiliaJapones-container" class="text-container">
-                     <span id="nomeFamiliaJaponesPreview"></span>
+                <div class="input-wrapper">
+                    <select id="periodonumeral" class="required">
+                        <option value="">Missa</option>
+                        <option value="7º dia">7º dia</option>
+                        <option value="14º dia">14º dia</option>
+                        <option value="21º dia">21º dia</option>
+                        <option value="28º dia">28º dia</option>
+                        <option value="35º dia">35º dia</option>
+                        <option value="42º dia">42º dia</option>
+                        <option value="49º dia">49º dia</option>
+                        <option value="100º dia">100º dia</option>
+                        <option value="1 ano">1 ano</option>
+                        <option value="3 anos">3 anos</option>
+                        <option value="7 anos">7 anos</option>
+                        <option value="13 anos">13 anos</option>
+                        <option value="17 anos">17 anos</option>
+                        <option value="23 anos">23 anos</option>
+                        <option value="27 anos">27 anos</option>
+                        <option value="33 anos">33 anos</option>
+                        <option value="50 anos">50 anos</option>
+                    </select>
+                    <span class="tooltip">Período da missa (obrigatório)</span>
                 </div>
             </div>
-            
+
+            <div class="form-row">
+                <div class="input-wrapper"> <!-- 1. Nome do Falecido em Japonês -->
+                    <input type="text" id="nomeFalecidoJapones" placeholder="Nome do falecido(a)">
+                    <span class="tooltip">Nome completo em japonês</span>
+                </div>
+                <div class="input-wrapper"> <!-- 2. Nome da Família em Japonês -->
+                    <input type="text" id="nomeFamiliaJapones" placeholder="Nome da Família">
+                    <span class="tooltip">Nome em caracteres japoneses</span>
+                </div>
+                <div class="input-wrapper"> <!-- 3. Missa de (Período em Japonês) -->
+                    <select id="periodo">
+                        <option value="">Missa</option>
+                        <option value="初七日">7° dia : 初七日</option>
+                        <option value="二七日">14° dia 二七日</option>
+                        <option value="三七日">21° dia 三七日</option>
+                        <option value="四七日">28° dia 四七日</option>
+                        <option value="五七日">35° dia 五七日</option>
+                        <option value="六七日">42° dia 六七日</option>
+                        <option value="四十九日">49° dia 四十九日</option>
+                        <option value="百箇日">100° dia 百箇日</option>
+                        <option value="一周忌">1 ano: 一周忌</option>
+                        <option value="三回忌">3 anos: 三回忌</option>
+                        <option value="七回忌">7 anos: 七回忌</option>
+                        <option value="十三回忌">13 anos: 十三回忌</option>
+                        <option value="十七回忌">17 anos: 十七回忌</option>
+                        <option value="二十三回忌">23 anos: 二十三回忌</option>
+                        <option value="二十七回忌">27 anos: 二十七回忌</option>
+                        <option value="三十三回忌">33 anos: 三十三回忌</option>
+                        <option value="五十回忌">50 anos: 五十回忌</option>
+                    </select>
+                    <span class="tooltip">Missa em japonês</span>
+                </div>
+                <div class="input-wrapper"> <!-- 4. Parentesco -->
+                    <select id="relacao">
+                        <option value="">Título do Falecido(a)</option>
+                        <option value="亡父">pai - 亡父</option>
+                        <option value="お母">mãe - お母</option>
+                        <option value="亡祖父">avô - 亡祖父</option>
+                        <option value="亡祖母">avó - 亡祖母</option>
+                        <option value="亡妻">esposa - 亡妻</option>
+                        <option value="亡主人">marido - 亡主人</option>
+                        <option value="亡岳父">sogro - 亡岳父</option>
+                        <option value="亡岳母">sogra - 亡岳母</option>
+                        <option value="亡嫁">nora - 亡嫁</option>
+                        <option value="亡婿">genro - 亡婿</option>
+                        <option value="亡長男">filho - 亡長男</option>
+                        <option value="亡長女">filha - 亡長女</option>
+                        <option value="亡兄">irmão - 亡兄</option>
+                        <option value="亡姉">irmã - 亡姉</option>
+                    </select>
+                    <span class="tooltip">Titulo com o falecido</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="tirar-print">Salvar Noshigami</button>
+            <button id="capturar-imagem">Capturar Imagem</button>
+            <button id="ocultar-traducao">Ocultar Tradução</button>
+            <button id="restaurar-posicoes">Restaurar Posições</button>
+            <button id="exportar-txt">Exportar Campos</button>
+            <button id="limpar-campos">Limpar Campos</button>
+        </div>
+
+        <!-- O stage é fluido; o canvas interno tem tamanho fixo (1794x787 unidades
+             de design) e é escalado por JS. Nenhuma posição depende da resolução. -->
+        <div id="preview">
+            <div id="noshigami-stage">
+                <div id="noshigami-canvas">
+                    <!-- src definido por script.js a partir de assets/fundo-noshigami.js
+                         (data URI). Noshigami.jpg fica como fallback e como fonte
+                         original para regerar o data URI se a arte mudar. -->
+                    <img id="imagemPreview" src="Noshigami.jpg" alt="Pré-visualização do noshigami">
+
+                    <div id="texto-fixo" class="draggable">
+                        Missa de <span id="periodoPreviewNumeral"></span> de <span id="nomeFalecidoPreviewFix"></span>.
+                        A Família <span id="nomeFamiliaPreviewFix"></span> agradece as condolências recebidas
+                    </div>
+
+                    <div id="missa-container" class="text-container draggable">
+                        <span id="periodoPreview"></span>
+                    </div>
+
+                    <div id="nomeFalecidoJapones-container" class="text-container draggable">
+                        <span id="nomeFalecidoJaponesPreview"></span>
+                    </div>
+
+                    <div id="relacao-container" class="text-container draggable">
+                        <span id="relacaoPreview"></span>
+                    </div>
+
+                    <div id="nomeFamiliaJapones-container" class="text-container draggable">
+                        <span id="nomeFamiliaJaponesPreview"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
+
+
+
+
+
 </body>
 </html>
