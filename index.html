@@ -1,18 +1,16 @@
+<!DOCTYPE html>
 <html lang="pt-BR"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Noshigami - Tenman-ya</title>
 
-    <!-- Zero bibliotecas de terceiros.
-         jQuery, jQuery UI, docx, html2canvas e Font Awesome nunca eram usados ou
-         foram substituídos por SVG embutido. dom-to-image e FileSaver saíram
-         quando a captura passou a ser desenhada direto em <canvas>: a geração do
-         PNG e o download agora usam só APIs nativas do navegador. O app funciona
-         offline e nenhum código externo roda sobre um formulário com dados
-         pessoais.
-         O único arquivo carregado aqui é a arte de fundo em data URI, necessária
-         para que o canvas não seja bloqueado ao abrir a página sem servidor. -->
+    <!-- Todos os recursos ficam locais para preservar o funcionamento offline.
+         JSZip é usado somente para preencher o template DOCX; a captura PNG
+         continua sendo feita diretamente pelo canvas do navegador. -->
+    <script src="vendor/jszip.min.js"></script>
     <script src="assets/fundo-noshigami.js"></script>
+    <script src="assets/modelo-docx.js"></script>
+    <script src="docx-export.js"></script>
 <style>/* Fonte Yuji Syuku (fonts/YujiSyuku-Regular.ttf já existia no projeto, mas nunca era
    declarada via @font-face — sem isso o navegador sempre caía no fallback 'serif'). */
 @font-face {
@@ -243,14 +241,19 @@ body[data-theme="dark"] .form-row:hover {
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.form-row:first-child::before {
+.form-row.portugues::before {
     content: 'Informações em Português';
     background: var(--primary-gradient);
 }
 
-.form-row:nth-child(2)::before { /* Usando nth-child para o segundo */
+.form-row.japones::before {
     content: 'Informações em Japonês';
     background: var(--secondary-gradient);
+}
+
+.form-row.mensagem-row::before {
+    content: 'Mensagem em Português';
+    background: var(--tertiary-gradient);
 }
 
 
@@ -263,7 +266,7 @@ body[data-theme="dark"] .form-row:hover {
     min-width: 200px; /* Para não ficarem muito pequenos */
 }
 
-input[type="text"], select {
+input[type="text"], input[type="date"], textarea, select {
     padding: 14px 18px;
     border: 2px solid transparent;
     border-radius: 12px;
@@ -277,7 +280,9 @@ input[type="text"], select {
     color: var(--text-light);
 }
 
-body[data-theme="dark"] input[type="text"] {
+body[data-theme="dark"] input[type="text"],
+body[data-theme="dark"] input[type="date"],
+body[data-theme="dark"] textarea {
     background: linear-gradient(var(--input-bg-dark), var(--input-bg-dark)) padding-box,
                 var(--primary-gradient) border-box;
     color: var(--text-dark);
@@ -288,26 +293,29 @@ body[data-theme="dark"] select {
     border-color: var(--input-border-dark);
 }
 
-input[type="text"]:focus, select:focus {
+input[type="text"]:focus, input[type="date"]:focus, textarea:focus, select:focus {
     transform: translateY(-2px);
     box-shadow: 0 10px 25px rgba(102, 126, 234, 0.25);
     outline: none;
     border-color: #667eea; /* Destaque no foco */
 }
 body[data-theme="dark"] input[type="text"]:focus,
+body[data-theme="dark"] input[type="date"]:focus,
+body[data-theme="dark"] textarea:focus,
 body[data-theme="dark"] select:focus {
     border-color: #89f7fe;
 }
 
 
-input[type="text"]:hover, select:hover {
+input[type="text"]:hover, input[type="date"]:hover, textarea:hover, select:hover {
     transform: translateY(-1px);
     box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
 }
 
 /* Indicador de campo obrigatório */
 input[type="text"].required:invalid, select.required:invalid,
-input[type="text"].required.error-field, select.required.error-field { /* Adicionada classe error-field para controle via JS */
+input[type="text"].required.error-field, input[type="date"].required.error-field,
+select.required.error-field { /* Adicionada classe error-field para controle via JS */
     background: linear-gradient(var(--input-bg-light), var(--input-bg-light)) padding-box,
                 linear-gradient(135deg, var(--required-border-color), #ff8787) border-box;
     border: 2px solid var(--required-border-color);
@@ -315,6 +323,7 @@ input[type="text"].required.error-field, select.required.error-field { /* Adicio
 body[data-theme="dark"] input[type="text"].required:invalid,
 body[data-theme="dark"] select.required:invalid,
 body[data-theme="dark"] input[type="text"].required.error-field, 
+body[data-theme="dark"] input[type="date"].required.error-field,
 body[data-theme="dark"] select.required.error-field {
     background: linear-gradient(var(--input-bg-dark), var(--input-bg-dark)) padding-box,
                 linear-gradient(135deg, var(--required-border-color), #ff8787) border-box;
@@ -402,6 +411,185 @@ select option {
 body[data-theme="dark"] select option {
     background: var(--bg-dark); /* Fundo mais escuro para options */
     color: var(--text-dark);
+}
+
+textarea {
+    min-height: 96px;
+    resize: vertical;
+    line-height: 1.45;
+}
+
+.input-wrapper.full-width {
+    flex-basis: 100%;
+}
+
+.inline-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: Arial, sans-serif;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.checkbox-label input {
+    width: 18px;
+    height: 18px;
+    accent-color: #667eea;
+}
+
+.small-action {
+    padding: 9px 16px;
+    font-size: 13px;
+    letter-spacing: 0.4px;
+    text-transform: none;
+    background: #edf2ff;
+    color: #334155;
+}
+
+body[data-theme="dark"] .small-action {
+    background: #303854;
+    color: #f0f0f0;
+}
+
+.ime-help {
+    flex-basis: 100%;
+    margin-top: 4px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(245, 87, 108, 0.08);
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.termo-panel {
+    margin: 28px 0 8px;
+    padding: 24px;
+    border: 2px solid rgba(102, 126, 234, 0.25);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.65);
+    font-family: Arial, sans-serif;
+}
+
+.termo-panel[hidden] {
+    display: none;
+}
+
+body[data-theme="dark"] .termo-panel {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.termo-panel h2 {
+    margin-bottom: 14px;
+}
+
+.termo-panel p {
+    margin: 10px 0;
+    line-height: 1.5;
+}
+
+.termo-fields {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin: 18px 0;
+}
+
+#print-area {
+    display: none;
+    background: #fff;
+    color: #111;
+    font-family: Arial, sans-serif;
+}
+
+#print-noshigami-image {
+    display: block;
+    width: 36.5cm;
+    height: 16cm;
+}
+
+.print-termo {
+    width: 36.5cm;
+    margin: 0.55cm auto 0;
+    font-size: 10pt;
+    line-height: 1.25;
+}
+
+.print-termo h1 {
+    margin: 0 0 0.2cm;
+    font-size: 14pt;
+    text-align: center;
+}
+
+.print-termo p {
+    margin: 0.12cm 0;
+}
+
+.print-identificacao {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 0.6cm;
+    margin-top: 0.3cm;
+}
+
+.linha-preenchimento,
+.linha-assinatura {
+    display: inline-block;
+    min-width: 8cm;
+    border-bottom: 1px solid #111;
+    padding: 0 0.15cm 0.08cm;
+}
+
+.linha-assinatura {
+    display: block;
+    width: 13cm;
+    margin: 0.65cm auto 0;
+    text-align: center;
+}
+
+@media print {
+    html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body > *:not(#print-area) {
+        display: none !important;
+    }
+
+    #print-area {
+        display: block !important;
+        box-shadow: none !important;
+    }
+
+    body.print-noshigami #print-area {
+        width: 36.5cm;
+        height: 16cm;
+    }
+
+    body.print-noshigami .print-termo {
+        display: none !important;
+    }
+
+    body.print-aprovacao #print-area {
+        width: 42cm;
+        height: 29.7cm;
+        padding-top: 0.6cm;
+    }
+
+    body.print-aprovacao #print-noshigami-image {
+        margin: 0 auto;
+    }
 }
 
 /* Botões */
@@ -502,6 +690,18 @@ button:active {
 }
 #capturar-imagem:hover {
     box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+}
+
+#exportar-docx,
+#imprimir-noshigami {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white;
+}
+
+#alternar-termo,
+#imprimir-aprovacao {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    color: white;
 }
 
 /* Preview */
@@ -840,6 +1040,12 @@ body[data-theme="dark"] .history-panel h3 {
 }
 
 .history-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    font-family: Arial, sans-serif;
     padding: 15px;
     margin-bottom: 12px;
     background: #f9f9f9; /* Fundo mais claro */
@@ -847,6 +1053,10 @@ body[data-theme="dark"] .history-panel h3 {
     cursor: pointer;
     transition: all 0.2s ease-in-out; /* Transição mais rápida */
     border: 1px solid #eee;
+}
+
+.history-item::before {
+    display: none;
 }
 
 body[data-theme="dark"] .history-item {
@@ -963,6 +1173,10 @@ body[data-theme="dark"] .history-item small.timestamp {
     .help-modal .help-content {
         padding: 20px;
     }
+
+    .termo-fields {
+        grid-template-columns: 1fr;
+    }
 }
 
 
@@ -997,19 +1211,26 @@ body[data-theme="dark"] .history-item small.timestamp {
             <ol>
                 <li><strong>Preencha os campos obrigatórios</strong> (marcados em vermelho)</li>
                 <li><strong>Visualize</strong> o resultado no preview abaixo</li>
-                <li><strong>Salve</strong> a imagem clicando em "Salvar Noshigami"</li>
+                <li><strong>Salve</strong> em PNG, exporte para Word ou escolha um modo de impressão</li>
             </ol>
+            <h3>🇯🇵 Entrada em Japonês:</h3>
+            <ul>
+                <li>Ative o <strong>Microsoft IME Japonês</strong> antes de digitar.</li>
+                <li>Para nomes estrangeiros, escreva a leitura japonesa e pressione <kbd>F7</kbd> para converter hiragana em katakana.</li>
+                <li>Revise o resultado antes de salvar; nomes próprios podem exigir correção manual.</li>
+            </ul>
             <h3>⌨️ Atalhos de Teclado:</h3>
             <ul>
                 <li><kbd>Tab</kbd> - Navegar entre campos</li>
                 <li><kbd>Ctrl + S</kbd> - Salvar imagem</li>
-                <li><kbd>Esc</kbd> - Ocultar/Mostrar tradução</li>
+                <li><kbd>Esc</kbd> - Fechar ajuda ou histórico</li>
                 <li><kbd>Ctrl + L</kbd> - Limpar todos os campos</li>
             </ul>
             <h3>💡 Dicas:</h3>
             <ul>
                 <li>O <strong>histórico</strong> salva suas últimas 10 entradas</li>
-                <li>Exporte os dados em TXT após finalizado</li>
+                <li>Use a folha de aprovação A3 para manter o Noshigami em tamanho real com o termo abaixo</li>
+                <li>Na impressão, selecione escala 100% e desative cabeçalhos e rodapés</li>
             </ul>
         </div>
     </div>
@@ -1047,7 +1268,7 @@ body[data-theme="dark"] .history-item small.timestamp {
         </div>
 
         <div id="form-container">
-            <div class="form-row">
+            <div class="form-row portugues">
                 <div class="input-wrapper">
                     <input type="text" id="nomeFalecido" placeholder="Nome do Falecido(a)" class="required">
                     <span class="tooltip">Nome completo do falecido (obrigatório)</span>
@@ -1081,26 +1302,26 @@ body[data-theme="dark"] .history-item small.timestamp {
                 </div>
             </div>
 
-            <div class="form-row">
+            <div class="form-row japones">
                 <div class="input-wrapper"> <!-- 1. Nome do Falecido em Japonês -->
-                    <input type="text" id="nomeFalecidoJapones" placeholder="Nome do falecido(a)">
+                    <input type="text" id="nomeFalecidoJapones" placeholder="Nome do falecido(a)" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false">
                     <span class="tooltip">Nome completo em japonês</span>
                 </div>
                 <div class="input-wrapper"> <!-- 2. Nome da Família em Japonês -->
-                    <input type="text" id="nomeFamiliaJapones" placeholder="Nome da Família">
+                    <input type="text" id="nomeFamiliaJapones" placeholder="Nome da Família" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false">
                     <span class="tooltip">Nome em caracteres japoneses</span>
                 </div>
                 <div class="input-wrapper"> <!-- 3. Missa de (Período em Japonês) -->
                     <select id="periodo">
                         <option value="">Missa</option>
-                        <option value="初七日">7° dia : 初七日</option>
-                        <option value="二七日">14° dia 二七日</option>
-                        <option value="三七日">21° dia 三七日</option>
-                        <option value="四七日">28° dia 四七日</option>
-                        <option value="五七日">35° dia 五七日</option>
-                        <option value="六七日">42° dia 六七日</option>
-                        <option value="四十九日">49° dia 四十九日</option>
-                        <option value="百箇日">100° dia 百箇日</option>
+                        <option value="初七日忌">7º dia: 初七日忌</option>
+                        <option value="二七日忌">14º dia: 二七日忌</option>
+                        <option value="三七日忌">21º dia: 三七日忌</option>
+                        <option value="四七日忌">28º dia: 四七日忌</option>
+                        <option value="五七日忌">35º dia: 五七日忌</option>
+                        <option value="六七日忌">42º dia: 六七日忌</option>
+                        <option value="四十九日忌">49º dia: 四十九日忌</option>
+                        <option value="百箇日忌">100º dia: 百箇日忌</option>
                         <option value="一周忌">1 ano: 一周忌</option>
                         <option value="三回忌">3 anos: 三回忌</option>
                         <option value="七回忌">7 anos: 七回忌</option>
@@ -1115,33 +1336,71 @@ body[data-theme="dark"] .history-item small.timestamp {
                 </div>
                 <div class="input-wrapper"> <!-- 4. Parentesco -->
                     <select id="relacao">
-                        <option value="">Título do Falecido(a)</option>
+                        <option value="亡" selected>Sem parentesco - 亡</option>
+                        <option value="">Não exibir título</option>
                         <option value="亡父">pai - 亡父</option>
-                        <option value="お母">mãe - お母</option>
+                        <option value="亡母">mãe - 亡母</option>
                         <option value="亡祖父">avô - 亡祖父</option>
                         <option value="亡祖母">avó - 亡祖母</option>
                         <option value="亡妻">esposa - 亡妻</option>
-                        <option value="亡主人">marido - 亡主人</option>
+                        <option value="亡夫">marido - 亡夫</option>
                         <option value="亡岳父">sogro - 亡岳父</option>
-                        <option value="亡岳母">sogra - 亡岳母</option>
+                        <option value="亡義母">sogra - 亡義母</option>
                         <option value="亡嫁">nora - 亡嫁</option>
                         <option value="亡婿">genro - 亡婿</option>
-                        <option value="亡長男">filho - 亡長男</option>
-                        <option value="亡長女">filha - 亡長女</option>
+                        <option value="亡息子">filho - 亡息子</option>
+                        <option value="亡娘">filha - 亡娘</option>
                         <option value="亡兄">irmão - 亡兄</option>
                         <option value="亡姉">irmã - 亡姉</option>
                     </select>
                     <span class="tooltip">Titulo com o falecido</span>
                 </div>
+                <p class="ime-help"><strong>Microsoft IME:</strong> ative o teclado japonês, digite a leitura do nome e pressione <kbd>F7</kbd> para converter hiragana em katakana. O sistema não converte automaticamente nomes portugueses; revise antes de salvar.</p>
+            </div>
+
+            <div class="form-row mensagem-row">
+                <div class="input-wrapper full-width">
+                    <textarea id="mensagemPortugues" rows="3" aria-label="Mensagem em português"></textarea>
+                    <div class="inline-controls">
+                        <label class="checkbox-label" for="mostrarMensagem">
+                            <input type="checkbox" id="mostrarMensagem" checked>
+                            Exibir mensagem no Noshigami
+                        </label>
+                        <button type="button" class="small-action" id="restaurar-mensagem">Restaurar mensagem padrão</button>
+                    </div>
+                </div>
             </div>
         </div>
+
+        <section class="termo-panel" id="termo-compromisso" hidden aria-labelledby="termo-titulo">
+            <h2 id="termo-titulo">Termo de Compromisso</h2>
+            <p>O cliente da Tenman-ya se compromete a escolher um modelo para a impressão do Noshigami e não poderá alterá-lo após a confirmação.</p>
+            <p>Alterações posteriores (nome, “kanji”, etc.) terão custo adicional de R$ 2,00 por impressão, e a data de entrega poderá sofrer mudanças.</p>
+            <p>O termo é válido desde a assinatura até a conclusão do pedido de Okaeshi.</p>
+            <div class="termo-fields">
+                <div class="input-wrapper">
+                    <input type="text" id="nomeCliente" placeholder="Nome do cliente">
+                </div>
+                <div class="input-wrapper">
+                    <input type="date" id="dataTermo" aria-label="Data do termo">
+                </div>
+            </div>
+            <label class="checkbox-label" for="aceiteTermo">
+                <input type="checkbox" id="aceiteTermo">
+                Confirmo que o cliente leu e aceitou as condições acima.
+            </label>
+        </section>
 
         <div class="button-group">
             <button id="tirar-print">Salvar Noshigami</button>
             <button id="capturar-imagem">Capturar Imagem</button>
-            <button id="ocultar-traducao">Ocultar Tradução</button>
+            <button id="ocultar-traducao">Ocultar Mensagem</button>
             <button id="restaurar-posicoes">Restaurar Posições</button>
             <button id="exportar-txt">Exportar Campos</button>
+            <button id="exportar-docx">Exportar Word (.docx)</button>
+            <button id="alternar-termo" aria-expanded="false" aria-controls="termo-compromisso">Mostrar Termo</button>
+            <button id="imprimir-noshigami">Imprimir Noshigami</button>
+            <button id="imprimir-aprovacao">Imprimir Aprovação e Termo</button>
             <button id="limpar-campos">Limpar Campos</button>
         </div>
 
@@ -1155,10 +1414,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                          original para regerar o data URI se a arte mudar. -->
                     <img id="imagemPreview" src="Noshigami.jpg" alt="Pré-visualização do noshigami">
 
-                    <div id="texto-fixo" class="draggable">
-                        Missa de <span id="periodoPreviewNumeral"></span> de <span id="nomeFalecidoPreviewFix"></span>.
-                        A Família <span id="nomeFamiliaPreviewFix"></span> agradece as condolências recebidas
-                    </div>
+                    <div id="texto-fixo" class="draggable"><span id="mensagemPreview"></span></div>
 
                     <div id="missa-container" class="text-container draggable">
                         <span id="periodoPreview"></span>
@@ -1178,6 +1434,22 @@ body[data-theme="dark"] .history-item small.timestamp {
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="print-area" aria-hidden="true">
+        <img id="print-noshigami-image" alt="Noshigami pronto para impressão">
+        <section class="print-termo">
+            <h1>Termo de Compromisso</h1>
+            <p>O cliente da Tenman-ya se compromete a escolher um modelo para a impressão do Noshigami e não poderá alterá-lo após a confirmação.</p>
+            <p>Alterações posteriores (nome, “kanji”, etc.) terão custo adicional de R$ 2,00 por impressão, e a data de entrega poderá sofrer mudanças.</p>
+            <p>O termo é válido desde a assinatura até a conclusão do pedido de Okaeshi.</p>
+            <p>[X] O cliente declara que leu e aceitou as condições acima.</p>
+            <div class="print-identificacao">
+                <p>Cliente: <span class="linha-preenchimento" id="print-nome-cliente"></span></p>
+                <p>Data: <span class="linha-preenchimento" id="print-data-termo"></span></p>
+            </div>
+            <span class="linha-assinatura">Assinatura do cliente</span>
+        </section>
     </div>
 
     <script src="script.js"></script>
