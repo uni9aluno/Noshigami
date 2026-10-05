@@ -80,18 +80,42 @@ function iniciarServidor() {
 
     try {
         await page.goto(`http://127.0.0.1:${porta}/index.html`, { waitUntil: 'networkidle' });
+        assert.equal(await page.locator('#helpModal').isVisible(), true, 'A ajuda não abriu automaticamente.');
+        assert.match(await page.locator('#helpModal').textContent(), /Nome do Falecido\(a\).*Imprimir Aprovação e Termo/s, 'A ajuda não detalha campos e ações.');
+        const helpScreenshot = path.join(os.tmpdir(), 'noshigami-ajuda.png');
+        await page.screenshot({ path: helpScreenshot });
+        await page.locator('.help-close').click();
+        assert.equal(await page.locator('#helpModal').isVisible(), false, 'A ajuda não fechou pelo botão ×.');
+        assert.equal(await page.locator('#tirar-print').isDisabled(), true, 'Finalização deveria iniciar bloqueada.');
         await page.locator('.history-toggle').click();
         await page.locator('.history-item').click();
         assert.equal(await page.locator('#periodo').inputValue(), '初七日忌', 'Histórico antigo não foi migrado.');
         await page.locator('#nomeFalecido').fill('Armando Teste');
         await page.locator('#nomeFamilia').fill('Yamada');
-        await page.locator('#nomeFalecidoJapones').fill('アルマンド');
-        await page.locator('#nomeFamiliaJapones').fill('山田');
+        await page.evaluate(() => { window.confirm = () => true; });
+        await page.locator('.katakana-action').nth(0).click();
+        await page.locator('.katakana-action').nth(1).click();
+        assert.equal(await page.locator('#nomeFalecidoJapones').inputValue(), 'アルマンド テステ');
+        assert.equal(await page.locator('#nomeFamiliaJapones').inputValue(), 'ヤマダ');
+        await page.locator('#confirmarJapones').check();
+        assert.equal(await page.locator('#tirar-print').isEnabled(), true, 'Finalização não foi liberada após a revisão.');
         await page.locator('#periodonumeral').selectOption('7º dia');
         await page.locator('#relacao').selectOption('亡');
         assert.equal(await page.locator('#periodo').inputValue(), '初七日忌');
         assert.equal(await page.locator('#relacao').inputValue(), '亡');
         assert.match(await page.locator('#mensagemPortugues').inputValue(), /Armando Teste/);
+        assert.equal(await page.locator('#capturar-imagem').count(), 0, 'Botão Capturar Imagem ainda está visível.');
+
+        await page.evaluate(() => {
+            window.confirm = () => true;
+            window.print = () => { window.__pdfSolicitado = true; };
+        });
+        await page.locator('#tirar-print').click();
+        await page.waitForFunction(() => window.__pdfSolicitado === true);
+        assert.equal(await page.locator('#print-page-style').textContent(), '@page { size: 36.5cm 16cm; margin: 0; }');
+        await page.evaluate(() => {
+            window.dispatchEvent(new Event('afterprint'));
+        });
 
         await page.locator('#mensagemPortugues').fill('Mensagem personalizada para aprovação.');
         await page.locator('#mostrarMensagem').uncheck();
@@ -111,7 +135,7 @@ function iniciarServidor() {
         assert.ok(fs.statSync(docx).size > 100000, 'DOCX baixado está vazio.');
         const zipExportado = await JSZip.loadAsync(fs.readFileSync(docx));
         const xmlExportado = await zipExportado.file('word/document.xml').async('string');
-        for (const texto of ['アルマンド', '山田家', '初七日忌', 'Mensagem personalizada para aprovação.']) {
+        for (const texto of ['アルマンド テステ', 'ヤマダ家', '初七日忌', 'Mensagem personalizada para aprovação.']) {
             assert.ok(xmlExportado.includes(texto), `Conteúdo ausente do DOCX baixado: ${texto}`);
         }
 
@@ -157,10 +181,18 @@ function iniciarServidor() {
         await page.evaluate(() => localStorage.setItem('noshigamiHistory', '{invalido'));
         await page.reload({ waitUntil: 'networkidle' });
         assert.equal(await page.locator('#nomeFalecido').isVisible(), true, 'Histórico corrompido impediu a inicialização.');
+        await page.locator('.help-close').click();
+        await page.setViewportSize({ width: 390, height: 844 });
+        const larguraMobile = await page.evaluate(() => ({ viewport: window.innerWidth, pagina: document.documentElement.scrollWidth }));
+        assert.ok(larguraMobile.pagina <= larguraMobile.viewport + 1, 'Layout mobile criou rolagem horizontal.');
+        const mobileScreenshot = path.join(os.tmpdir(), 'noshigami-mobile.png');
+        await page.screenshot({ path: mobileScreenshot, fullPage: true });
 
         assert.deepEqual(externos, [], 'A aplicação tentou acessar recursos externos.');
         assert.deepEqual(erros, [], 'Erros no navegador: ' + erros.join(' | '));
         console.log(`Teste de navegador concluído. Screenshot: ${screenshot}`);
+        console.log(`Ajuda inicial: ${helpScreenshot}`);
+        console.log(`Interface mobile: ${mobileScreenshot}`);
         console.log(`Prévia A3: ${printScreenshot}`);
         console.log(`PDF A3: ${printPdf}`);
         console.log(`PDF final: ${finalPdf}`);

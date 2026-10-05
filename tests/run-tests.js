@@ -6,6 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const JSZip = require('../vendor/jszip.min.js');
 const exporter = require('../docx-export.js');
+global.wanakana = require('../vendor/wanakana.min.js');
+const katakana = require('../katakana-transliterator.js');
 
 const raiz = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
@@ -27,6 +29,27 @@ for (const periodo of periodosEsperados) {
 assert.ok(html.includes('value="亡" selected'), 'Opção padrão somente 亡 ausente.');
 assert.ok(html.includes('id="mensagemPortugues"'), 'Campo de mensagem ausente.');
 assert.ok(html.includes('id="termo-compromisso"'), 'Termo de compromisso ausente.');
+assert.ok(html.includes('class="help-modal show"'), 'A ajuda não está configurada para abrir com a página.');
+for (const secao of ['Campos em português', 'Campos em japonês', 'Mensagem e pré-visualização', 'Termo de compromisso', 'Botões e saídas']) {
+    assert.ok(html.includes(secao), `Seção ausente na ajuda: ${secao}`);
+}
+assert.ok(script.includes("helpModal.classList.add('show')"), 'Inicialização não garante a abertura da ajuda.');
+for (const etapa of ['etapa-dados', 'etapa-revisao', 'etapa-finalizacao']) {
+    assert.ok(html.includes(`id="${etapa}"`), `Etapa operacional ausente: ${etapa}`);
+}
+assert.ok(html.includes('id="confirmarJapones"'), 'Confirmação de revisão japonesa ausente.');
+assert.ok(script.includes('function atualizarFluxo()'), 'Atualização dos estados do fluxo ausente.');
+assert.equal((html.match(/Sugerir katakana/g) || []).length >= 2, true, 'Botões de sugestão em katakana ausentes.');
+assert.ok(html.includes('vendor/wanakana.min.js'), 'WanaKana local não está carregado.');
+assert.ok(!html.includes('unpkg.com'), 'WanaKana não pode depender de CDN.');
+assert.equal(katakana.sugerir('Maria'), 'マリア', 'Transliteração de Maria incorreta.');
+assert.equal(katakana.sugerir('Armando'), 'アルマンド', 'Transliteração de Armando incorreta.');
+assert.equal(katakana.sugerir('João'), 'ジョアン', 'Transliteração de João incorreta.');
+assert.ok(html.includes('id="tirar-print"'), 'Botão para salvar o Noshigami ausente.');
+assert.ok(!html.includes('id="capturar-imagem"'), 'Botão de captura de imagem ainda está presente.');
+assert.ok(script.includes("imprimir('noshigami', 'pdf')"), 'Botão Salvar Noshigami não aciona o fluxo de PDF.');
+assert.ok(script.includes("if (destino === 'pdf') saveToHistory();"), 'Salvamento em PDF não registra o histórico.');
+assert.ok(!script.includes('capturar-imagem'), 'Referência ao botão de captura ainda está presente.');
 assert.ok(script.includes('size: A3 landscape'), 'Regra de impressão A3 ausente.');
 
 async function testarDocx() {

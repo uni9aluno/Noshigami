@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function () {
         nomeCliente: document.getElementById('nomeCliente'),
         dataTermo: document.getElementById('dataTermo'),
         aceiteTermo: document.getElementById('aceiteTermo'),
+        confirmarJapones: document.getElementById('confirmarJapones'),
         termo: document.getElementById('termo-compromisso'),
         printArea: document.getElementById('print-area'),
         printImagem: document.getElementById('print-noshigami-image'),
@@ -29,7 +30,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const botoes = {
         salvar: document.getElementById('tirar-print'),
-        capturar: document.getElementById('capturar-imagem'),
         alternarMensagem: document.getElementById('ocultar-traducao'),
         restaurarMensagem: document.getElementById('restaurar-mensagem'),
         limpar: document.getElementById('limpar-campos'),
@@ -48,6 +48,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const feedbackMessage = document.getElementById('feedbackMessage');
     const stage = document.getElementById('noshigami-stage');
     const canvas = document.getElementById('noshigami-canvas');
+    const botoesKatakana = document.querySelectorAll('.katakana-action');
+    const fluxo = {
+        statusDados: document.getElementById('status-dados'),
+        statusRevisao: document.getElementById('status-revisao'),
+        statusFinalizacao: document.getElementById('status-finalizacao'),
+        checkObrigatorios: document.getElementById('check-obrigatorios'),
+        checkJapones: document.getElementById('check-japones'),
+        resumoFinalizacao: document.getElementById('resumo-finalizacao')
+    };
 
     const PERIODOS = Object.freeze([
         { portugues: '7º dia', japones: '初七日忌' },
@@ -192,6 +201,49 @@ document.addEventListener('DOMContentLoaded', function () {
         botoes.alternarMensagem.textContent = elementos.mostrarMensagem.checked
             ? 'Ocultar Mensagem'
             : 'Mostrar Mensagem';
+        atualizarFluxo();
+    }
+
+    function definirEstado(elemento, texto, estado) {
+        elemento.textContent = texto;
+        elemento.classList.remove('complete', 'warning', 'blocked', 'ready');
+        if (estado) elemento.classList.add(estado);
+    }
+
+    function atualizarFluxo() {
+        const obrigatorios = [elementos.nomeFalecido, elementos.nomeFamilia, elementos.periodoNumeral];
+        const preenchidos = obrigatorios.filter(campo => campo.value.trim()).length;
+        const dadosCompletos = preenchidos === obrigatorios.length;
+        const japonesCompleto = Boolean(elementos.nomeFalecidoJapones.value.trim() && elementos.nomeFamiliaJapones.value.trim());
+        const japonesRevisado = japonesCompleto && elementos.confirmarJapones.checked;
+        const pronto = dadosCompletos && japonesRevisado;
+
+        definirEstado(fluxo.statusDados, dadosCompletos ? 'Dados completos' : `${preenchidos} de 3 obrigatórios`, dadosCompletos ? 'complete' : 'blocked');
+        definirEstado(fluxo.checkObrigatorios, dadosCompletos ? '✓ Dados obrigatórios completos' : `○ Dados obrigatórios: ${preenchidos}/3`, dadosCompletos ? 'complete' : 'blocked');
+        if (!japonesCompleto) {
+            definirEstado(fluxo.statusRevisao, 'Nomes japoneses pendentes', 'blocked');
+            definirEstado(fluxo.checkJapones, '⚠ Informe os dois nomes japoneses', 'warning');
+        } else if (!elementos.confirmarJapones.checked) {
+            definirEstado(fluxo.statusRevisao, 'Aguardando confirmação', 'warning');
+            definirEstado(fluxo.checkJapones, '⚠ Confirme a revisão japonesa', 'warning');
+        } else {
+            definirEstado(fluxo.statusRevisao, 'Modelo revisado', 'complete');
+            definirEstado(fluxo.checkJapones, '✓ Nomes japoneses revisados', 'complete');
+        }
+        definirEstado(fluxo.statusFinalizacao, pronto ? 'Pronto para finalizar' : 'Ação necessária', pronto ? 'complete' : 'blocked');
+        fluxo.resumoFinalizacao.textContent = pronto
+            ? 'Tudo pronto. Escolha abaixo como salvar, imprimir ou exportar o Noshigami.'
+            : !dadosCompletos
+                ? `Faltam ${3 - preenchidos} campo(s) obrigatório(s) na etapa 1.`
+                : !japonesCompleto
+                    ? 'Informe os dois nomes em japonês antes de finalizar.'
+                    : 'Marque a confirmação de revisão japonesa para liberar as saídas finais.';
+        fluxo.resumoFinalizacao.classList.toggle('ready', pronto);
+
+        [botoes.salvar, botoes.exportarDocx, botoes.imprimirNoshigami, botoes.imprimirAprovacao].forEach(botao => {
+            botao.disabled = !pronto;
+            botao.title = pronto ? '' : fluxo.resumoFinalizacao.textContent;
+        });
     }
 
     function dadosAtuais() {
@@ -254,6 +306,7 @@ document.addEventListener('DOMContentLoaded', function () {
             elementos.mensagem.value = mensagemPadrao();
         }
         elementos.mostrarMensagem.checked = data.mostrarMensagem !== false;
+        elementos.confirmarJapones.checked = false;
         updatePreview();
         historyPanel.classList.remove('open');
         showFeedback('Dados carregados do histórico.', 'success');
@@ -273,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function () {
             localStorage.setItem('noshigamiHistory', JSON.stringify(historyData));
         } catch (erro) {
             console.warn('Não foi possível salvar o histórico:', erro);
-            showFeedback('Imagem salva, mas o histórico não pôde ser atualizado.', 'info', 5000);
+            showFeedback('Arquivo salvo, mas o histórico não pôde ser atualizado.', 'info', 5000);
         }
         updateHistoryDisplay();
     }
@@ -409,36 +462,6 @@ document.addEventListener('DOMContentLoaded', function () {
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
-    function baixarImagem(tela, nomeArquivo) {
-        return new Promise((resolver, rejeitar) => {
-            tela.toBlob(blob => {
-                if (!blob) return rejeitar(new Error('Canvas vazio.'));
-                baixarBlob(blob, nomeArquivo);
-                resolver();
-            }, 'image/png');
-        });
-    }
-
-    async function capturar(validar) {
-        if (validar && !validateForm()) {
-            showFeedback('Preencha os campos obrigatórios marcados em vermelho.', 'error');
-            return;
-        }
-        showLoading();
-        try {
-            await document.fonts.ready;
-            const tela = montarImagem(LARGURA_EXPORTACAO / DESIGN_W);
-            await baixarImagem(tela, nomeDoArquivo('png'));
-            if (validar) saveToHistory();
-            showFeedback('Imagem gerada com sucesso.', 'success');
-        } catch (erro) {
-            console.error('Falha ao gerar a imagem:', erro);
-            showFeedback('Não foi possível gerar a imagem.', 'error', 6000);
-        } finally {
-            hideLoading();
-        }
-    }
-
     function exportarTxt() {
         const dados = dadosAtuais();
         const conteudo = [
@@ -506,9 +529,10 @@ document.addEventListener('DOMContentLoaded', function () {
         elementos.printArea.setAttribute('aria-hidden', 'true');
     }
 
-    async function imprimir(modo) {
+    async function imprimir(modo, destino = 'impressao') {
         if (!validateForm()) {
-            showFeedback('Preencha os campos obrigatórios antes de imprimir.', 'error');
+            const acao = destino === 'pdf' ? 'salvar em PDF' : 'imprimir';
+            showFeedback(`Preencha os campos obrigatórios antes de ${acao}.`, 'error');
             return;
         }
         if (modo === 'aprovacao' && (!elementos.nomeCliente.value.trim() || !elementos.dataTermo.value || !elementos.aceiteTermo.checked)) {
@@ -519,7 +543,9 @@ document.addEventListener('DOMContentLoaded', function () {
             elementos.termo.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
-        const aviso = modo === 'aprovacao'
+        const aviso = destino === 'pdf'
+            ? 'Será aberta a janela de impressão. Em Destino, escolha "Salvar como PDF", use escala 100% e desative cabeçalhos e rodapés. Continuar?'
+            : modo === 'aprovacao'
             ? 'Será aberta a impressão A3 paisagem. Use escala 100% e desative cabeçalhos e rodapés. Continuar?'
             : 'Será aberta a impressão em papel personalizado 36,5 × 16 cm. Use escala 100% e desative cabeçalhos e rodapés. Continuar?';
         if (!window.confirm(aviso)) return;
@@ -540,6 +566,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 : '@page { size: 36.5cm 16cm; margin: 0; }';
             document.head.appendChild(estilo);
             window.addEventListener('afterprint', limparModoImpressao, { once: true });
+            if (destino === 'pdf') saveToHistory();
             window.print();
         } catch (erro) {
             limparModoImpressao();
@@ -550,12 +577,36 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    botoes.salvar.addEventListener('click', () => capturar(true));
-    botoes.capturar.addEventListener('click', () => capturar(false));
+    botoes.salvar.addEventListener('click', () => imprimir('noshigami', 'pdf'));
     botoes.exportarTxt.addEventListener('click', exportarTxt);
     botoes.exportarDocx.addEventListener('click', exportarDocx);
     botoes.imprimirNoshigami.addEventListener('click', () => imprimir('noshigami'));
     botoes.imprimirAprovacao.addEventListener('click', () => imprimir('aprovacao'));
+    botoesKatakana.forEach(botao => botao.addEventListener('click', function () {
+        const origem = document.getElementById(botao.dataset.origem);
+        const destino = document.getElementById(botao.dataset.destino);
+        if (!origem.value.trim()) {
+            showFeedback('Preencha primeiro o nome em português.', 'error');
+            origem.focus();
+            return;
+        }
+        try {
+            if (!window.NoshigamiKatakana) throw new Error('Módulo de katakana indisponível.');
+            const sugestao = window.NoshigamiKatakana.sugerir(origem.value);
+            const valorAtual = destino.value.trim();
+            const aviso = valorAtual
+                ? `Sugestão: ${sugestao}\n\nSubstituir o valor atual “${valorAtual}”? Revise a leitura antes de salvar.`
+                : `Sugestão: ${sugestao}\n\nAplicar ao campo japonês? Revise a leitura antes de salvar.`;
+            if (!window.confirm(aviso)) return;
+            destino.value = sugestao;
+            elementos.confirmarJapones.checked = false;
+            updatePreview();
+            showFeedback('Sugestão aplicada. Revise a leitura japonesa.', 'info', 5000);
+        } catch (erro) {
+            console.error('Falha ao sugerir katakana:', erro);
+            showFeedback('Não foi possível sugerir katakana para este nome.', 'error', 5000);
+        }
+    }));
 
     botoes.restaurarPosicoes.addEventListener('click', function () {
         aplicarPosicoesPadrao();
@@ -590,6 +641,7 @@ document.addEventListener('DOMContentLoaded', function () {
         elementos.nomeCliente.value = '';
         elementos.dataTermo.value = dataLocalIso();
         elementos.aceiteTermo.checked = false;
+        elementos.confirmarJapones.checked = false;
         elementos.mostrarMensagem.checked = true;
         mensagemAutomatica = true;
         document.querySelectorAll('.error-field').forEach(campo => campo.classList.remove('error-field'));
@@ -599,7 +651,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     [elementos.nomeFalecido, elementos.nomeFamilia, elementos.nomeFalecidoJapones, elementos.nomeFamiliaJapones]
-        .forEach(campo => campo.addEventListener('input', updatePreview));
+        .forEach(campo => campo.addEventListener('input', function () {
+            elementos.confirmarJapones.checked = false;
+            updatePreview();
+        }));
     elementos.periodoNumeral.addEventListener('change', function () {
         sincronizarPorPortugues();
         updatePreview();
@@ -610,6 +665,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     elementos.relacao.addEventListener('change', updatePreview);
     elementos.mostrarMensagem.addEventListener('change', updatePreview);
+    elementos.confirmarJapones.addEventListener('change', updatePreview);
     elementos.mensagem.addEventListener('input', function () {
         mensagemAutomatica = false;
         updatePreview();
@@ -642,6 +698,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function initializeApp() {
+        helpModal.classList.add('show');
         try {
             applyTheme(localStorage.getItem('noshigamiTheme') || 'light');
         } catch (erro) {

@@ -5,12 +5,14 @@
     <title>Noshigami - Tenman-ya</title>
 
     <!-- Todos os recursos ficam locais para preservar o funcionamento offline.
-         JSZip é usado somente para preencher o template DOCX; a captura PNG
-         continua sendo feita diretamente pelo canvas do navegador. -->
+         JSZip é usado somente para preencher o template DOCX; a preparação do
+         PDF continua sendo feita diretamente pelo navegador. -->
     <script src="vendor/jszip.min.js"></script>
     <script src="assets/fundo-noshigami.js"></script>
     <script src="assets/modelo-docx.js"></script>
     <script src="docx-export.js"></script>
+    <script src="vendor/wanakana.min.js"></script>
+    <script src="katakana-transliterator.js"></script>
 <style>/* Fonte Yuji Syuku (fonts/YujiSyuku-Regular.ttf já existia no projeto, mas nunca era
    declarada via @font-face — sem isso o navegador sempre caía no fallback 'serif'). */
 @font-face {
@@ -200,6 +202,115 @@ body[data-theme="dark"] .history-toggle:hover {
     flex-direction: column;
     gap: 25px; /* Aumentado gap */
     margin: 30px 0;
+}
+
+.workflow-section {
+    margin: 28px 0;
+    padding: 24px;
+    border: 1px solid rgba(102, 126, 234, 0.22);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.42);
+    box-shadow: 0 10px 28px rgba(44, 62, 110, 0.08);
+}
+body[data-theme="dark"] .workflow-section {
+    background: rgba(255, 255, 255, 0.045);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+.workflow-heading {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(102, 126, 234, 0.16);
+}
+.step-number {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    color: #fff;
+    font: 700 20px/1 Arial, sans-serif;
+    box-shadow: 0 6px 15px rgba(51, 124, 233, 0.24);
+}
+.workflow-heading h2 { margin: 0; font-size: 22px; }
+.workflow-heading p { margin: 4px 0 0; color: #64748b; font: 14px/1.4 Arial, sans-serif; }
+body[data-theme="dark"] .workflow-heading p { color: #b6c1d1; }
+.step-status {
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #475569;
+    font: 700 12px/1.2 Arial, sans-serif;
+    white-space: nowrap;
+}
+.step-status.complete { background: #dcfce7; color: #166534; }
+.step-status.warning { background: #fef3c7; color: #92400e; }
+.step-status.blocked { background: #fee2e2; color: #991b1b; }
+.field-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin: 0 2px 7px;
+    color: #334155;
+    font: 700 13px/1.3 Arial, sans-serif;
+}
+body[data-theme="dark"] .field-label { color: #e2e8f0; }
+.required-badge {
+    color: #b42318;
+    font-size: 11px;
+    font-weight: 600;
+}
+.review-checklist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 18px 0;
+}
+.review-item {
+    padding: 8px 12px;
+    border-radius: 9px;
+    background: #eef2f7;
+    color: #475569;
+    font: 600 13px/1.3 Arial, sans-serif;
+}
+.review-item.complete { background: #dcfce7; color: #166534; }
+.review-item.warning { background: #fef3c7; color: #92400e; }
+.review-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 12px 0;
+}
+.finalization-status {
+    margin: 18px 0;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #fff7ed;
+    color: #9a3412;
+    font: 700 14px/1.45 Arial, sans-serif;
+}
+.finalization-status.ready { background: #ecfdf3; color: #166534; }
+.review-confirmation {
+    display: flex;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    border: 1px solid rgba(102, 126, 234, 0.25);
+    border-radius: 12px;
+    background: rgba(102, 126, 234, 0.06);
+}
+.final-actions { margin-top: 22px; }
+.final-actions .primary-action { min-width: 280px; }
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.46;
+    filter: grayscale(0.35);
+    transform: none !important;
+    box-shadow: none !important;
 }
 
 /* Linha de formulário */
@@ -454,6 +565,10 @@ textarea {
     background: #edf2ff;
     color: #334155;
 }
+.katakana-action {
+    width: 100%;
+    margin-top: 8px;
+}
 
 body[data-theme="dark"] .small-action {
     background: #303854;
@@ -684,14 +799,6 @@ button:active {
     box-shadow: 0 8px 25px rgba(95, 109, 122, 0.4);
 }
 
-#capturar-imagem {
-    background: linear-gradient(135deg, #11998e, #38ef7d);
-    color: white;
-}
-#capturar-imagem:hover {
-    box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
-}
-
 #exportar-docx,
 #imprimir-noshigami {
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
@@ -904,7 +1011,7 @@ body[data-theme="dark"] .text-container { color: #1c212b; }
     background: var(--container-light);
     padding: 30px 40px; /* Ajustado */
     border-radius: 15px; /* Suavizado */
-    max-width: 650px; /* Aumentado */
+    max-width: 900px;
     width: 90%;
     max-height: 85vh; /* Aumentado */
     overflow-y: auto;
@@ -973,6 +1080,31 @@ body[data-theme="dark"] .help-content h3 {
 .help-content ol, .help-content ul {
     margin-left: 20px;
     line-height: 1.8; /* Melhor legibilidade */
+}
+.help-section {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: 10px;
+    background: rgba(102, 126, 234, 0.05);
+}
+.help-section h3 { margin-top: 0; }
+.help-fields {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 2fr);
+    gap: 8px 18px;
+    margin: 0;
+}
+.help-fields dt { font-weight: 700; }
+.help-fields dd { margin: 0; line-height: 1.5; }
+.help-note {
+    border-left: 4px solid #667eea;
+    padding: 10px 12px;
+    background: rgba(102, 126, 234, 0.08);
+}
+body[data-theme="dark"] .help-section {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.04);
 }
 .help-content kbd {
     background-color: #e0e0e0;
@@ -1174,6 +1306,15 @@ body[data-theme="dark"] .history-item small.timestamp {
         padding: 20px;
     }
 
+    .help-fields { grid-template-columns: 1fr; }
+    .help-fields dd { margin-bottom: 8px; }
+
+    .workflow-section { padding: 18px 14px; }
+    .workflow-heading { grid-template-columns: auto 1fr; }
+    .workflow-heading .step-status { grid-column: 1 / -1; justify-self: start; }
+    .review-toolbar { justify-content: stretch; }
+    .review-toolbar button { flex: 1 1 180px; }
+
     .termo-fields {
         grid-template-columns: 1fr;
     }
@@ -1202,36 +1343,85 @@ body[data-theme="dark"] .history-item small.timestamp {
 
     <div class="feedback-message info" id="feedbackMessage">Tradução exibida.</div>
 
-    <div class="help-modal" id="helpModal">
+    <div class="help-modal show" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="help-title">
         <div class="help-content">
-            <button class="help-close" onclick="toggleHelp()">×</button>
-            <h2>📖 Como usar o Noshigami</h2>
+            <button class="help-close" onclick="toggleHelp()" aria-label="Fechar ajuda">×</button>
+            <h2 id="help-title">📖 Guia completo do Noshigami</h2>
             <hr>
-            <h3>🎯 Passos Básicos:</h3>
-            <ol>
-                <li><strong>Preencha os campos obrigatórios</strong> (marcados em vermelho)</li>
-                <li><strong>Visualize</strong> o resultado no preview abaixo</li>
-                <li><strong>Salve</strong> em PNG, exporte para Word ou escolha um modo de impressão</li>
-            </ol>
-            <h3>🇯🇵 Entrada em Japonês:</h3>
-            <ul>
-                <li>Ative o <strong>Microsoft IME Japonês</strong> antes de digitar.</li>
-                <li>Para nomes estrangeiros, escreva a leitura japonesa e pressione <kbd>F7</kbd> para converter hiragana em katakana.</li>
-                <li>Revise o resultado antes de salvar; nomes próprios podem exigir correção manual.</li>
-            </ul>
-            <h3>⌨️ Atalhos de Teclado:</h3>
-            <ul>
-                <li><kbd>Tab</kbd> - Navegar entre campos</li>
-                <li><kbd>Ctrl + S</kbd> - Salvar imagem</li>
-                <li><kbd>Esc</kbd> - Fechar ajuda ou histórico</li>
-                <li><kbd>Ctrl + L</kbd> - Limpar todos os campos</li>
-            </ul>
-            <h3>💡 Dicas:</h3>
-            <ul>
-                <li>O <strong>histórico</strong> salva suas últimas 10 entradas</li>
-                <li>Use a folha de aprovação A3 para manter o Noshigami em tamanho real com o termo abaixo</li>
-                <li>Na impressão, selecione escala 100% e desative cabeçalhos e rodapés</li>
-            </ul>
+            <p>Esta ajuda aparece sempre que a página é aberta. Feche no <strong>×</strong>, pressione <kbd>Esc</kbd> ou use o botão <strong>Ajuda</strong> no cabeçalho para consultar novamente.</p>
+
+            <section class="help-section">
+                <h3>Fluxo de atendimento</h3>
+                <ol>
+                    <li><strong>Dados do Noshigami:</strong> preencha os três obrigatórios e prepare os nomes japoneses.</li>
+                    <li><strong>Revisão do modelo:</strong> confira mensagem, caracteres e composição com o cliente.</li>
+                    <li><strong>Finalização:</strong> confirme a revisão japonesa para liberar PDF, Word e impressões.</li>
+                </ol>
+            </section>
+
+            <section class="help-section">
+                <h3>Etapa 1 — Campos em português</h3>
+                <dl class="help-fields">
+                    <dt>Nome do Falecido(a) *</dt><dd>Nome completo para identificação, mensagem automática, histórico e nome dos arquivos. É obrigatório.</dd>
+                    <dt>Nome da Família *</dt><dd>Família responsável pela oferenda. Alimenta a mensagem automática e o histórico. É obrigatório.</dd>
+                    <dt>Missa *</dt><dd>Selecione o período memorial. A opção japonesa correspondente é preenchida automaticamente. É obrigatório.</dd>
+                </dl>
+            </section>
+
+            <section class="help-section">
+                <h3>Etapa 1 — Campos em japonês</h3>
+                <dl class="help-fields">
+                    <dt>Nome do falecido(a)</dt><dd>Leitura japonesa do nome, normalmente em katakana para nomes estrangeiros. É exibida verticalmente na prévia.</dd>
+                    <dt>Nome da Família</dt><dd>Nome familiar em caracteres japoneses. Na prévia, o sistema acrescenta <strong>家</strong> ao final.</dd>
+                    <dt>Missa</dt><dd>Período memorial em japonês. Também pode ser escolhido aqui; o período em português será sincronizado.</dd>
+                    <dt>Parentesco/título</dt><dd>Define o título vertical antes do nome. <strong>Sem parentesco - 亡</strong> exibe somente 亡; <strong>Não exibir título</strong> remove o bloco.</dd>
+                </dl>
+                <p class="help-note"><strong>Sugestão local:</strong> preencha primeiro o nome em português e clique em <strong>Sugerir katakana</strong>. O resultado é calculado no navegador, sem envio de dados, e só substitui o campo após confirmação. Como nomes próprios admitem leituras diferentes, revise sempre com uma pessoa fluente.</p>
+            </section>
+
+            <section class="help-section">
+                <h3>Etapa 2 — Mensagem e pré-visualização</h3>
+                <dl class="help-fields">
+                    <dt>Mensagem em português</dt><dd>É criada automaticamente com os nomes informados. Pode ser editada livremente.</dd>
+                    <dt>Exibir mensagem</dt><dd>Mostra ou oculta a mensagem na arte final sem apagar o texto digitado.</dd>
+                    <dt>Restaurar mensagem padrão</dt><dd>Descarta a edição manual, recria o texto padrão e volta a exibi-lo.</dd>
+                    <dt>Textos na prévia</dt><dd>Arraste os blocos diretamente sobre a arte para ajustar suas posições. O PDF e as impressões respeitam esses ajustes.</dd>
+                </dl>
+            </section>
+
+            <section class="help-section">
+                <h3>Etapa 3 — Termo de compromisso</h3>
+                <dl class="help-fields">
+                    <dt>Nome do cliente</dt><dd>Identifica quem aprovou o modelo; é exigido somente para imprimir a folha de aprovação.</dd>
+                    <dt>Data do termo</dt><dd>Data da aprovação, preenchida inicialmente com o dia atual.</dd>
+                    <dt>Confirmação de aceite</dt><dd>Deve ser marcada após a leitura do termo para liberar a impressão de aprovação.</dd>
+                </dl>
+            </section>
+
+            <section class="help-section">
+                <h3>Etapa 3 — Botões e saídas</h3>
+                <dl class="help-fields">
+                    <dt>Salvar Noshigami</dt><dd>Abre a impressão da peça em 36,5 × 16 cm. Escolha <strong>Salvar como PDF</strong>, escala 100% e sem cabeçalhos/rodapés.</dd>
+                    <dt>Ocultar Mensagem</dt><dd>Alterna rapidamente a visibilidade da mensagem.</dd>
+                    <dt>Restaurar Posições</dt><dd>Retorna todos os textos às coordenadas originais da arte.</dd>
+                    <dt>Exportar Campos</dt><dd>Baixa um arquivo TXT com os valores preenchidos.</dd>
+                    <dt>Exportar Word</dt><dd>Gera um DOCX editável usando o template oficial do projeto.</dd>
+                    <dt>Mostrar Termo</dt><dd>Abre ou recolhe os campos e condições de aprovação.</dd>
+                    <dt>Imprimir Noshigami</dt><dd>Abre a impressão física no tamanho personalizado de 36,5 × 16 cm.</dd>
+                    <dt>Imprimir Aprovação e Termo</dt><dd>Gera uma folha A3 paisagem com a peça em tamanho real, dados do cliente e termo.</dd>
+                    <dt>Limpar Campos</dt><dd>Após confirmação, apaga os dados do formulário e restaura mensagem e posições padrão.</dd>
+                </dl>
+            </section>
+
+            <section class="help-section">
+                <h3>Cabeçalho, histórico e atalhos</h3>
+                <ul>
+                    <li><strong>Tema:</strong> alterna entre aparência clara e escura; a arte impressa permanece branca.</li>
+                    <li><strong>Histórico:</strong> guarda localmente as 10 últimas entradas salvas ou exportadas. Clique em um item para restaurá-lo.</li>
+                    <li><kbd>Tab</kbd>: próximo campo; <kbd>Ctrl + S</kbd>: salvar em PDF; <kbd>Ctrl + L</kbd>: limpar; <kbd>Ctrl + H</kbd>: histórico; <kbd>F1</kbd>: ajuda; <kbd>Esc</kbd>: fechar painel.</li>
+                </ul>
+                <p class="help-note"><strong>Privacidade:</strong> tudo funciona localmente. Nenhum dado digitado é enviado para servidores externos.</p>
+            </section>
         </div>
     </div>
 
@@ -1267,17 +1457,26 @@ body[data-theme="dark"] .history-item small.timestamp {
             </div>
         </div>
 
+        <section class="workflow-section" id="etapa-dados" aria-labelledby="etapa-dados-titulo">
+            <div class="workflow-heading">
+                <span class="step-number" aria-hidden="true">1</span>
+                <div><h2 id="etapa-dados-titulo">Dados do Noshigami</h2><p>Reúna as informações do cliente e prepare a leitura japonesa.</p></div>
+                <span class="step-status blocked" id="status-dados">0 de 3 obrigatórios</span>
+            </div>
         <div id="form-container">
             <div class="form-row portugues">
                 <div class="input-wrapper">
+                    <label class="field-label" for="nomeFalecido">Nome completo do falecido <span class="required-badge">Obrigatório</span></label>
                     <input type="text" id="nomeFalecido" placeholder="Nome do Falecido(a)" class="required">
                     <span class="tooltip">Nome completo do falecido (obrigatório)</span>
                 </div>
                  <div class="input-wrapper">
+                    <label class="field-label" for="nomeFamilia">Nome da família <span class="required-badge">Obrigatório</span></label>
                     <input type="text" id="nomeFamilia" placeholder="Nome da Família" class="required">
                     <span class="tooltip">Nome da família (obrigatório)</span>
                 </div>
                 <div class="input-wrapper">
+                    <label class="field-label" for="periodonumeral">Período memorial <span class="required-badge">Obrigatório</span></label>
                     <select id="periodonumeral" class="required">
                         <option value="">Missa</option>
                         <option value="7º dia">7º dia</option>
@@ -1304,14 +1503,19 @@ body[data-theme="dark"] .history-item small.timestamp {
 
             <div class="form-row japones">
                 <div class="input-wrapper"> <!-- 1. Nome do Falecido em Japonês -->
+                    <label class="field-label" for="nomeFalecidoJapones">Nome do falecido em japonês</label>
                     <input type="text" id="nomeFalecidoJapones" placeholder="Nome do falecido(a)" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false">
                     <span class="tooltip">Nome completo em japonês</span>
+                    <button type="button" class="small-action katakana-action" data-origem="nomeFalecido" data-destino="nomeFalecidoJapones">Sugerir katakana</button>
                 </div>
                 <div class="input-wrapper"> <!-- 2. Nome da Família em Japonês -->
+                    <label class="field-label" for="nomeFamiliaJapones">Nome da família em japonês</label>
                     <input type="text" id="nomeFamiliaJapones" placeholder="Nome da Família" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false">
                     <span class="tooltip">Nome em caracteres japoneses</span>
+                    <button type="button" class="small-action katakana-action" data-origem="nomeFamilia" data-destino="nomeFamiliaJapones">Sugerir katakana</button>
                 </div>
                 <div class="input-wrapper"> <!-- 3. Missa de (Período em Japonês) -->
+                    <label class="field-label" for="periodo">Período em japonês <span>Automático</span></label>
                     <select id="periodo">
                         <option value="">Missa</option>
                         <option value="初七日忌">7º dia: 初七日忌</option>
@@ -1335,6 +1539,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                     <span class="tooltip">Missa em japonês</span>
                 </div>
                 <div class="input-wrapper"> <!-- 4. Parentesco -->
+                    <label class="field-label" for="relacao">Parentesco ou título</label>
                     <select id="relacao">
                         <option value="亡" selected>Sem parentesco - 亡</option>
                         <option value="">Não exibir título</option>
@@ -1355,11 +1560,20 @@ body[data-theme="dark"] .history-item small.timestamp {
                     </select>
                     <span class="tooltip">Titulo com o falecido</span>
                 </div>
-                <p class="ime-help"><strong>Microsoft IME:</strong> ative o teclado japonês, digite a leitura do nome e pressione <kbd>F7</kbd> para converter hiragana em katakana. O sistema não converte automaticamente nomes portugueses; revise antes de salvar.</p>
+                <p class="ime-help"><strong>Japonês:</strong> use <strong>Sugerir katakana</strong> para gerar uma leitura local a partir do nome em português, ou digite/cole o texto. A sugestão é fonética e deve sempre ser revisada antes de salvar.</p>
             </div>
+        </div>
+        </section>
 
+        <section class="workflow-section" id="etapa-revisao" aria-labelledby="etapa-revisao-titulo">
+            <div class="workflow-heading">
+                <span class="step-number" aria-hidden="true">2</span>
+                <div><h2 id="etapa-revisao-titulo">Revisão do modelo</h2><p>Confira a mensagem, os caracteres japoneses e a composição final.</p></div>
+                <span class="step-status warning" id="status-revisao">Revisão pendente</span>
+            </div>
             <div class="form-row mensagem-row">
                 <div class="input-wrapper full-width">
+                    <label class="field-label" for="mensagemPortugues">Mensagem em português</label>
                     <textarea id="mensagemPortugues" rows="3" aria-label="Mensagem em português"></textarea>
                     <div class="inline-controls">
                         <label class="checkbox-label" for="mostrarMensagem">
@@ -1370,7 +1584,44 @@ body[data-theme="dark"] .history-item small.timestamp {
                     </div>
                 </div>
             </div>
-        </div>
+
+            <div class="review-checklist" aria-live="polite">
+                <span class="review-item" id="check-obrigatorios">○ Dados obrigatórios</span>
+                <span class="review-item" id="check-japones">⚠ Revisar nomes japoneses</span>
+                <span class="review-item complete">✓ Prévia atualizada</span>
+            </div>
+            <div class="review-toolbar">
+                <button id="ocultar-traducao">Ocultar Mensagem</button>
+                <button id="restaurar-posicoes">Restaurar Posições</button>
+            </div>
+
+            <!-- O stage é fluido; o canvas interno tem tamanho fixo (1794x787 unidades
+                 de design) e é escalado por JS. Nenhuma posição depende da resolução. -->
+            <div id="preview">
+                <div id="noshigami-stage">
+                    <div id="noshigami-canvas">
+                        <img id="imagemPreview" src="Noshigami.jpg" alt="Pré-visualização do noshigami">
+                        <div id="texto-fixo" class="draggable"><span id="mensagemPreview"></span></div>
+                        <div id="missa-container" class="text-container draggable"><span id="periodoPreview"></span></div>
+                        <div id="nomeFalecidoJapones-container" class="text-container draggable"><span id="nomeFalecidoJaponesPreview"></span></div>
+                        <div id="relacao-container" class="text-container draggable"><span id="relacaoPreview"></span></div>
+                        <div id="nomeFamiliaJapones-container" class="text-container draggable"><span id="nomeFamiliaJaponesPreview"></span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="workflow-section" id="etapa-finalizacao" aria-labelledby="etapa-finalizacao-titulo">
+            <div class="workflow-heading">
+                <span class="step-number" aria-hidden="true">3</span>
+                <div><h2 id="etapa-finalizacao-titulo">Finalização</h2><p>Confirme a revisão e escolha a saída necessária para o atendimento.</p></div>
+                <span class="step-status blocked" id="status-finalizacao">Aguardando revisão</span>
+            </div>
+            <div class="finalization-status" id="resumo-finalizacao" aria-live="polite">Preencha os campos obrigatórios e revise os nomes japoneses.</div>
+            <label class="checkbox-label review-confirmation" for="confirmarJapones">
+                <input type="checkbox" id="confirmarJapones">
+                Confirmo que revisei os nomes em japonês e a prévia com o cliente.
+            </label>
 
         <section class="termo-panel" id="termo-compromisso" hidden aria-labelledby="termo-titulo">
             <h2 id="termo-titulo">Termo de Compromisso</h2>
@@ -1391,11 +1642,8 @@ body[data-theme="dark"] .history-item small.timestamp {
             </label>
         </section>
 
-        <div class="button-group">
-            <button id="tirar-print">Salvar Noshigami</button>
-            <button id="capturar-imagem">Capturar Imagem</button>
-            <button id="ocultar-traducao">Ocultar Mensagem</button>
-            <button id="restaurar-posicoes">Restaurar Posições</button>
+        <div class="button-group final-actions">
+            <button id="tirar-print" class="primary-action">Salvar Noshigami em PDF</button>
             <button id="exportar-txt">Exportar Campos</button>
             <button id="exportar-docx">Exportar Word (.docx)</button>
             <button id="alternar-termo" aria-expanded="false" aria-controls="termo-compromisso">Mostrar Termo</button>
@@ -1403,37 +1651,7 @@ body[data-theme="dark"] .history-item small.timestamp {
             <button id="imprimir-aprovacao">Imprimir Aprovação e Termo</button>
             <button id="limpar-campos">Limpar Campos</button>
         </div>
-
-        <!-- O stage é fluido; o canvas interno tem tamanho fixo (1794x787 unidades
-             de design) e é escalado por JS. Nenhuma posição depende da resolução. -->
-        <div id="preview">
-            <div id="noshigami-stage">
-                <div id="noshigami-canvas">
-                    <!-- src definido por script.js a partir de assets/fundo-noshigami.js
-                         (data URI). Noshigami.jpg fica como fallback e como fonte
-                         original para regerar o data URI se a arte mudar. -->
-                    <img id="imagemPreview" src="Noshigami.jpg" alt="Pré-visualização do noshigami">
-
-                    <div id="texto-fixo" class="draggable"><span id="mensagemPreview"></span></div>
-
-                    <div id="missa-container" class="text-container draggable">
-                        <span id="periodoPreview"></span>
-                    </div>
-
-                    <div id="nomeFalecidoJapones-container" class="text-container draggable">
-                        <span id="nomeFalecidoJaponesPreview"></span>
-                    </div>
-
-                    <div id="relacao-container" class="text-container draggable">
-                        <span id="relacaoPreview"></span>
-                    </div>
-
-                    <div id="nomeFamiliaJapones-container" class="text-container draggable">
-                        <span id="nomeFamiliaJaponesPreview"></span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        </section>
     </div>
 
     <div id="print-area" aria-hidden="true">

@@ -23,16 +23,38 @@ Abra `index.html` em um navegador moderno. O projeto não requer instalação, s
 
 ## Fluxo de uso
 
-1. Preencha os campos em português e japonês.
-2. Selecione o período; as opções portuguesa e japonesa são sincronizadas.
-3. Revise o título do falecido. A opção padrão `Sem parentesco - 亡` exibe apenas `亡`.
-4. Edite, oculte ou restaure a mensagem em português.
-5. Ajuste as posições arrastando os textos sobre a pré-visualização.
-6. Salve em PNG, exporte para Word ou escolha um modo de impressão.
+A página é organizada em três etapas contínuas, sem navegação entre telas:
+
+1. **Dados do Noshigami:** preencha os três campos obrigatórios, confira o
+   período sincronizado e prepare os nomes em japonês.
+2. **Revisão do modelo:** edite a mensagem, confira os indicadores e ajuste os
+   textos diretamente na pré-visualização.
+3. **Finalização:** confirme que os nomes japoneses e a prévia foram revisados
+   com o cliente; essa confirmação libera PDF, Word e impressões.
+
+Os estados das etapas são atualizados imediatamente. Alterar qualquer nome em
+português ou japonês cancela a confirmação anterior para evitar que um arquivo
+seja produzido com uma leitura ainda não revisada.
+
+## Ajuda integrada
+
+A janela de ajuda é exibida em toda abertura da página e descreve cada campo,
+controle, saída e atalho. Depois de fechada, pode ser aberta novamente pelo
+botão de ajuda no cabeçalho ou pela tecla `F1`.
 
 ## Entrada em japonês
 
-Os campos estão preparados para o Microsoft IME, mas o navegador não controla o modo do teclado. Ative o IME Japonês, digite a leitura japonesa e use `F7` para converter hiragana em katakana. Revise nomes próprios manualmente.
+Os campos aceitam texto japonês digitado ou colado. O botão **Sugerir katakana**
+gera localmente uma aproximação fonética a partir do nome em português e pede
+confirmação antes de preencher o campo. Nenhum nome é enviado pela rede.
+
+O Microsoft IME continua sendo uma alternativa de entrada. Em ambos os casos,
+revise nomes próprios manualmente com uma pessoa fluente em japonês.
+
+A avaliação e a arquitetura do transliterador incorporado estão em
+[`docs/tradutor-local.md`](docs/tradutor-local.md). A recomendação é implementar
+as regras em etapas e manter confirmação humana antes de substituir o campo
+japonês.
 
 ## Impressão
 
