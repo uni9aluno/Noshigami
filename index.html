@@ -575,6 +575,51 @@ textarea {
     background: #edf2ff;
     color: #334155;
 }
+/* Linha abaixo de cada nome em japonês: leitura e de onde veio o texto. */
+.japones-status {
+    min-height: 1.4em;
+    margin: 6px 2px 0;
+    color: #475569;
+    font: 600 13px/1.4 Arial, sans-serif;
+}
+.japones-status .leitura { color: #0f172a; }
+.japones-status .origem-memoria { color: #166534; }
+.japones-status .origem-manual { color: #92400e; }
+.japones-status .dica-kanji { color: #9a3412; }
+.japones-status .voltar-automatico {
+    margin-left: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+}
+body[data-theme="dark"] .japones-status { color: #cbd5e1; }
+body[data-theme="dark"] .japones-status .leitura { color: #f8fafc; }
+
+.memoria-backup {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(100, 116, 139, 0.3);
+    font: 13px/1.45 Arial, sans-serif;
+}
+.memoria-backup p { margin-bottom: 8px; }
+.memoria-backup button { margin: 0 6px 6px 0; }
+
+/* Leitura para o cliente, só visível na tela cheia. */
+#leitura-cliente { display: none; }
+#preview:fullscreen #leitura-cliente:not(:empty) {
+    display: block;
+    position: absolute;
+    left: 50%;
+    bottom: 3vmin;
+    transform: translateX(-50%);
+    max-width: 90vw;
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
+    font: 600 clamp(14px, 1.6vw, 22px)/1.35 Arial, sans-serif;
+    text-align: center;
+}
+
 .katakana-action {
     width: 100%;
     margin-top: 8px;
@@ -1503,7 +1548,8 @@ body[data-theme="dark"] .history-item small.timestamp {
                     <dt>Missa</dt><dd>Período memorial em japonês. Também pode ser escolhido aqui; o período em português será sincronizado.</dd>
                     <dt>Parentesco/título</dt><dd>Define o título vertical antes do nome. <strong>Sem parentesco - 亡</strong> exibe somente 亡; <strong>Não exibir título</strong> remove o bloco.</dd>
                 </dl>
-                <p class="help-note"><strong>Sugestão local:</strong> preencha primeiro o nome em português e clique em <strong>Sugerir katakana</strong>. O resultado é calculado no navegador, sem envio de dados, e só substitui o campo após confirmação. Como nomes próprios admitem leituras diferentes, revise sempre com uma pessoa fluente.</p>
+                <p class="help-note"><strong>Preenchimento automático:</strong> ao digitar o nome em português, o app preenche o nome em japonês sozinho. Se o falecido ou a família já foram atendidos neste computador, ele usa os nomes aprovados da última vez (memória da loja); senão, gera o katakana. Embaixo de cada campo aparece a leitura (“lê-se”) para conferir com o cliente. Se alguém digitar no campo japonês, o app respeita o texto e oferece <strong>Voltar ao automático</strong>.</p>
+                <p class="help-note"><strong>Memória da loja:</strong> é gravada sozinha sempre que a peça é impressa, salva em PDF ou exportada; a impressão de aprovação marca o registro como aprovado pelo cliente. Fica neste navegador — use <strong>Exportar/Importar memória</strong> no Histórico para ter cópia ou levar para outro computador.</p>
                 <p class="help-note"><strong>Katakana ou kanji?</strong> Katakana é a escrita usada para nomes estrangeiros, como os brasileiros (Armando → アルマンド). Nomes e sobrenomes <strong>de origem japonesa</strong> (Yamada, Watanabe, Iwamoto) costumam ser escritos em <strong>kanji</strong> pela família: 山田家, 渡辺家, 岩本家. Nesses casos, pergunte ao cliente como a família escreve o nome; se for em kanji, peça a grafia (um documento, um Noshigami anterior) e digite com o teclado japonês do Windows (IME). A sugestão em katakana serve apenas quando a família não usa kanji. Hiragana não é usado para nomes no Noshigami.</p>
             </section>
 
@@ -1560,6 +1606,12 @@ body[data-theme="dark"] .history-item small.timestamp {
              (Antes havia 4 itens de teste fixos no HTML — dados de debug que nunca deveriam
              ter ido para produção; removidos.) -->
         <div id="historyList"></div>
+        <div class="memoria-backup">
+            <p><strong>Memória da loja:</strong> <span id="memoria-total">0 nomes guardados</span>. Guarde uma cópia ou leve para outro computador.</p>
+            <button type="button" class="small-action" id="exportar-memoria">Exportar memória</button>
+            <button type="button" class="small-action" id="importar-memoria">Importar memória</button>
+            <input type="file" id="arquivo-memoria" accept="application/json,.json" hidden>
+        </div>
         <button class="history-close-btn" onclick="toggleHistory()">Fechar</button>
     </div>
 
@@ -1636,13 +1688,13 @@ body[data-theme="dark"] .history-item small.timestamp {
                     <label class="field-label" for="nomeFalecidoJapones">Nome do falecido em japonês</label>
                     <input type="text" id="nomeFalecidoJapones" placeholder="Nome do falecido(a)" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false">
                     <span class="tooltip">Nome completo em japonês</span>
-                    <button type="button" class="small-action katakana-action" data-origem="nomeFalecido" data-destino="nomeFalecidoJapones">Sugerir katakana</button>
+                    <p class="japones-status" id="status-nomeFalecidoJapones" aria-live="polite"></p>
                 </div>
                 <div class="input-wrapper"> <!-- 2. Nome da Família em Japonês -->
                     <label class="field-label" for="nomeFamiliaJapones">Nome da família em japonês</label>
                     <input type="text" id="nomeFamiliaJapones" placeholder="Nome da Família" lang="ja" autocomplete="off" autocapitalize="off" spellcheck="false">
                     <span class="tooltip">Nome em caracteres japoneses</span>
-                    <button type="button" class="small-action katakana-action" data-origem="nomeFamilia" data-destino="nomeFamiliaJapones">Sugerir katakana</button>
+                    <p class="japones-status" id="status-nomeFamiliaJapones" aria-live="polite"></p>
                 </div>
                 <div class="input-wrapper"> <!-- 3. Missa de (Período em Japonês) -->
                     <label class="field-label" for="periodo">Período em japonês <span>Automático</span></label>
@@ -1690,7 +1742,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                     </select>
                     <span class="tooltip">Titulo com o falecido</span>
                 </div>
-                <p class="ime-help"><strong>Japonês:</strong> use <strong>Sugerir katakana</strong> para gerar uma leitura local a partir do nome em português, ou digite/cole o texto. A sugestão é fonética e deve sempre ser revisada antes de salvar. <strong>Sobrenome de origem japonesa?</strong> Pergunte ao cliente se a família usa kanji (ex.: 山田家); se usar, digite o kanji com o IME.</p>
+                <p class="ime-help"><strong>Nomes em japonês:</strong> são preenchidos sozinhos a partir do nome em português — ou da memória da loja, quando a família já foi atendida. Mostre a prévia ao cliente em <strong>Tela cheia</strong> e confira a leitura (“lê-se”) com ele.</p>
             </div>
         </div>
         </section>
@@ -1730,6 +1782,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                  de design) e é escalado por JS. Nenhuma posição depende da resolução. -->
             <div id="preview">
                 <button type="button" id="sair-tela-cheia">Sair da tela cheia (Esc)</button>
+                <p id="leitura-cliente"></p>
                 <div id="noshigami-stage">
                     <div id="noshigami-canvas">
                         <img id="imagemPreview" src="Noshigami.jpg" alt="Pré-visualização do noshigami">
@@ -1801,6 +1854,7 @@ body[data-theme="dark"] .history-item small.timestamp {
             <p>O cliente da Tenman-ya se compromete a escolher um modelo para a impressão do Noshigami e não poderá alterá-lo após a confirmação.</p>
             <p>Alterações posteriores (nome, “kanji”, etc.) terão custo adicional de R$ 2,00 por impressão, e a data de entrega poderá sofrer mudanças.</p>
             <p>O termo é válido desde a assinatura até a conclusão do pedido de Okaeshi.</p>
+            <p id="print-leitura"></p>
             <p>[X] O cliente declara que leu e aceitou as condições acima.</p>
             <div class="print-identificacao">
                 <p>Cliente: <span class="linha-preenchimento" id="print-nome-cliente"></span></p>

@@ -25,7 +25,9 @@ document.addEventListener('DOMContentLoaded', function () {
         printArea: document.getElementById('print-area'),
         printImagem: document.getElementById('print-noshigami-image'),
         printNomeCliente: document.getElementById('print-nome-cliente'),
-        printDataTermo: document.getElementById('print-data-termo')
+        printDataTermo: document.getElementById('print-data-termo'),
+        printLeitura: document.getElementById('print-leitura'),
+        leituraCliente: document.getElementById('leitura-cliente')
     };
 
     const botoes = {
@@ -50,7 +52,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const feedbackMessage = document.getElementById('feedbackMessage');
     const stage = document.getElementById('noshigami-stage');
     const canvas = document.getElementById('noshigami-canvas');
-    const botoesKatakana = document.querySelectorAll('.katakana-action');
     const fluxo = {
         statusDados: document.getElementById('status-dados'),
         statusRevisao: document.getElementById('status-revisao'),
@@ -209,6 +210,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ? elementos.nomeFamiliaJapones.value + '家'
             : '';
         elementos.relacaoPreview.textContent = elementos.relacao.value;
+        atualizarStatusJapones();
         elementos.mensagemPreview.textContent = elementos.mensagem.value;
         elementos.textoFixo.style.display = elementos.mostrarMensagem.checked ? 'block' : 'none';
         botoes.alternarMensagem.textContent = elementos.mostrarMensagem.checked
@@ -311,6 +313,12 @@ document.addEventListener('DOMContentLoaded', function () {
         elementos.relacao.value = data.relacao == null ? '亡' : data.relacao;
         elementos.nomeFamilia.value = data.nomeFamilia || '';
         elementos.nomeFamiliaJapones.value = data.nomeFamiliaJapones || '';
+        Object.keys(CAMPOS_JAPONESES).forEach(campo => {
+            const temValor = Boolean(elementos[campo].value.trim());
+            origemJapones[campo] = temValor ? 'memoria' : 'auto';
+            registroUsado[campo] = temValor ? { aprovado: false, atualizadoEm: data.timestamp } : null;
+        });
+        if (!elementos.nomeFalecidoJapones.value.trim() || !elementos.nomeFamiliaJapones.value.trim()) preencherJapones();
         if (Object.prototype.hasOwnProperty.call(data, 'mensagem')) {
             elementos.mensagem.value = data.mensagem || '';
             mensagemAutomatica = false;
@@ -326,6 +334,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function saveToHistory() {
+        registrarNaMemoria(false);
         const atual = { id: Date.now(), ...dadosAtuais(), timestamp: new Date().toISOString() };
         const campos = [
             'nomeFalecido', 'nomeFalecidoJapones', 'periodonumeral', 'periodo', 'relacao',
@@ -563,6 +572,9 @@ document.addEventListener('DOMContentLoaded', function () {
             ? 'Será aberta a impressão A3 paisagem. Use escala 100% e desative cabeçalhos e rodapés. Continuar?'
             : 'Será aberta a impressão em papel personalizado 36,5 × 16 cm. Use escala 100% e desative cabeçalhos e rodapés. Continuar?';
         if (!window.confirm(aviso)) return;
+        // A folha de aprovação é assinada pelo cliente: o registro na memória
+        // passa a valer como grafia aprovada pela família.
+        registrarNaMemoria(modo === 'aprovacao');
         showLoading();
         try {
             await document.fonts.ready;
@@ -596,36 +608,313 @@ document.addEventListener('DOMContentLoaded', function () {
     botoes.exportarDocx.addEventListener('click', exportarDocx);
     botoes.imprimirNoshigami.addEventListener('click', () => imprimir('noshigami'));
     botoes.imprimirAprovacao.addEventListener('click', () => imprimir('aprovacao'));
-    botoesKatakana.forEach(botao => botao.addEventListener('click', function () {
-        const origem = document.getElementById(botao.dataset.origem);
-        const destino = document.getElementById(botao.dataset.destino);
-        if (!origem.value.trim()) {
-            showFeedback('Preencha primeiro o nome em português.', 'error');
-            origem.focus();
+
+    /* =======================================================================
+       NOMES EM JAPONÊS AUTOMÁTICOS + MEMÓRIA DA LOJA
+       -----------------------------------------------------------------------
+       Quem atende no balcão não sabe japonês. Por isso o vendedor só digita em
+       português e o app preenche os campos japoneses sozinho, nesta ordem:
+         1. memória da loja: o que a família já aprovou em atendimento anterior
+            (as missas se repetem: 7º dia, 49º dia, 1 ano, 3 anos...);
+         2. katakana gerado pelo conversor local.
+       Se alguém digitar no campo japonês, o texto é respeitado ("manual") até
+       que se clique em "Voltar ao automático". A memória é gravada sozinha ao
+       imprimir, salvar em PDF ou exportar; a impressão de aprovação marca o
+       registro como aprovado pelo cliente.
+       ======================================================================= */
+    const CHAVE_MEMORIA = 'noshigamiMemoria';
+    const MAX_MEMORIA = 2000;
+    const CAMPOS_JAPONESES = {
+        nomeFalecidoJapones: { portugues: 'nomeFalecido', memoria: 'nomeFalecidoJapones' },
+        nomeFamiliaJapones: { portugues: 'nomeFamilia', memoria: 'nomeFamiliaJapones' }
+    };
+    // De onde veio o texto de cada campo japonês: 'auto' | 'memoria' | 'manual'.
+    const origemJapones = { nomeFalecidoJapones: 'auto', nomeFamiliaJapones: 'auto' };
+    const registroUsado = { nomeFalecidoJapones: null, nomeFamiliaJapones: null };
+    let memoria = carregarMemoria();
+    let ultimoRegistroAvisado = '';
+
+    function normalizarNome(valor) {
+        return String(valor || '')
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function carregarMemoria() {
+        try {
+            const salva = JSON.parse(localStorage.getItem(CHAVE_MEMORIA) || '[]');
+            return Array.isArray(salva) ? salva.filter(item => item && item.nomeFalecido) : [];
+        } catch (erro) {
+            console.warn('Memória da loja inválida ignorada:', erro);
+            return [];
+        }
+    }
+
+    function gravarMemoria() {
+        try {
+            localStorage.setItem(CHAVE_MEMORIA, JSON.stringify(memoria));
+        } catch (erro) {
+            console.warn('Não foi possível gravar a memória da loja:', erro);
+        }
+        atualizarTotalMemoria();
+    }
+
+    function atualizarTotalMemoria() {
+        const total = document.getElementById('memoria-total');
+        if (total) total.textContent = `${memoria.length} ${memoria.length === 1 ? 'nome guardado' : 'nomes guardados'}`;
+    }
+
+    // Junta um registro à memória; o mais recente vai para o fim da lista.
+    function mesclarNaMemoria(novo) {
+        const chave = normalizarNome(novo.nomeFalecido) + '|' + normalizarNome(novo.nomeFamilia);
+        const indice = memoria.findIndex(item =>
+            normalizarNome(item.nomeFalecido) + '|' + normalizarNome(item.nomeFamilia) === chave);
+        const anterior = indice >= 0 ? memoria.splice(indice, 1)[0] : null;
+        const maisNovo = !anterior || String(novo.atualizadoEm || '') >= String(anterior.atualizadoEm || '');
+        const base = maisNovo ? { ...anterior, ...novo } : { ...novo, ...anterior };
+        base.aprovado = Boolean((anterior && anterior.aprovado) || novo.aprovado);
+        base.aprovadoEm = (anterior && anterior.aprovadoEm) || novo.aprovadoEm || '';
+        base.periodos = Array.from(new Set([...(anterior && anterior.periodos) || [], ...(novo.periodos || [])]));
+        memoria.push(base);
+        if (memoria.length > MAX_MEMORIA) memoria.splice(0, memoria.length - MAX_MEMORIA);
+    }
+
+    function registrarNaMemoria(aprovado) {
+        const d = dadosAtuais();
+        if (!d.nomeFalecido.trim() || !(d.nomeFalecidoJapones.trim() || d.nomeFamiliaJapones.trim())) return;
+        const agora = new Date().toISOString();
+        mesclarNaMemoria({
+            nomeFalecido: d.nomeFalecido.trim(),
+            nomeFamilia: d.nomeFamilia.trim(),
+            nomeFalecidoJapones: d.nomeFalecidoJapones.trim(),
+            nomeFamiliaJapones: d.nomeFamiliaJapones.trim(),
+            relacao: d.relacao,
+            periodos: d.periodonumeral ? [d.periodonumeral] : [],
+            aprovado: Boolean(aprovado),
+            aprovadoEm: aprovado ? agora : '',
+            atualizadoEm: agora
+        });
+        gravarMemoria();
+    }
+
+    // Atendimento anterior do mesmo falecido. Com a família digitada, ela
+    // precisa bater; sem ela, vale o atendimento mais recente.
+    function buscarFalecido() {
+        const falecido = normalizarNome(elementos.nomeFalecido.value);
+        if (falecido.length < 3) return null;
+        const familia = normalizarNome(elementos.nomeFamilia.value);
+        for (let i = memoria.length - 1; i >= 0; i -= 1) {
+            const item = memoria[i];
+            if (normalizarNome(item.nomeFalecido) !== falecido) continue;
+            if (familia && normalizarNome(item.nomeFamilia) !== familia) continue;
+            return item;
+        }
+        return null;
+    }
+
+    // A família pode ter sido atendida por outro falecido: o nome dela em
+    // japonês (às vezes em kanji, como 山田) continua valendo.
+    function buscarFamilia() {
+        const familia = normalizarNome(elementos.nomeFamilia.value);
+        if (familia.length < 2) return null;
+        for (let i = memoria.length - 1; i >= 0; i -= 1) {
+            const item = memoria[i];
+            if (normalizarNome(item.nomeFamilia) === familia && item.nomeFamiliaJapones) return item;
+        }
+        return null;
+    }
+
+    function katakanaAutomatico(valor) {
+        if (!valor.trim() || !window.NoshigamiKatakana) return '';
+        try {
+            return window.NoshigamiKatakana.sugerir(valor);
+        } catch (erro) {
+            console.warn('Sem katakana automático para:', valor, erro);
+            return '';
+        }
+    }
+
+    function preencherJapones() {
+        const falecido = buscarFalecido();
+        if (falecido) {
+            // Mesma pessoa digitada sem capricho ("shigeru watanabe"): usa a grafia guardada.
+            if (elementos.nomeFalecido.value.trim() !== falecido.nomeFalecido) elementos.nomeFalecido.value = falecido.nomeFalecido;
+            if (!elementos.nomeFamilia.value.trim() && falecido.nomeFamilia) elementos.nomeFamilia.value = falecido.nomeFamilia;
+            // O parentesco é do falecido: só troca se ainda estiver no padrão.
+            if (elementos.relacao.value === '亡' && falecido.relacao != null) elementos.relacao.value = falecido.relacao;
+        }
+        const familia = falecido && falecido.nomeFamiliaJapones ? falecido : buscarFamilia();
+        const registros = { nomeFalecidoJapones: falecido, nomeFamiliaJapones: familia };
+
+        Object.entries(CAMPOS_JAPONESES).forEach(([campo, config]) => {
+            if (origemJapones[campo] === 'manual') return;
+            const registro = registros[campo];
+            if (registro && registro[config.memoria]) {
+                elementos[campo].value = registro[config.memoria];
+                origemJapones[campo] = 'memoria';
+                registroUsado[campo] = registro;
+            } else {
+                elementos[campo].value = katakanaAutomatico(elementos[config.portugues].value);
+                origemJapones[campo] = 'auto';
+                registroUsado[campo] = null;
+            }
+        });
+
+        const encontrado = falecido || familia;
+        const chaveAviso = encontrado ? normalizarNome(encontrado.nomeFalecido) + '|' + normalizarNome(encontrado.nomeFamilia) : '';
+        if (encontrado && chaveAviso !== ultimoRegistroAvisado) {
+            showFeedback(falecido
+                ? 'Atendimento anterior encontrado: nomes em japonês preenchidos da memória da loja.'
+                : 'Família já atendida: nome da família em japonês preenchido da memória da loja.', 'success', 4500);
+        }
+        ultimoRegistroAvisado = chaveAviso;
+    }
+
+    /* Leitura em sílabas para quem não lê japonês conferir pelo som:
+       ワタナベ → "Wa-ta-na-be". Kanji não tem leitura automática. */
+    const KANA_PEQUENO = /[ァィゥェォャュョヮー]/;
+    function leituraPortuguesa(texto) {
+        const valor = String(texto || '').trim();
+        if (!valor || !window.wanakana || /[^゠-ヿ぀-ゟ\s]/.test(valor)) return '';
+        return valor.split(/\s+/).map(palavra => {
+            const grupos = [];
+            let pendente = '';
+            for (const caractere of palavra) {
+                if (caractere === 'ッ' || caractere === 'っ') { pendente += caractere; continue; }
+                if ((KANA_PEQUENO.test(caractere) || caractere === 'ン' || caractere === 'ん') && grupos.length) {
+                    grupos[grupos.length - 1] += caractere;
+                    continue;
+                }
+                grupos.push(pendente + caractere);
+                pendente = '';
+            }
+            const silabas = grupos.map(grupo => window.wanakana.toRomaji(grupo)
+                // Ajustes para a leitura em português: シゲ é "gue", チ é "tchi".
+                .replace(/ge/g, 'gue').replace(/gi/g, 'gui').replace(/chi/g, 'tchi'));
+            const junto = silabas.join('-');
+            return junto.charAt(0).toUpperCase() + junto.slice(1);
+        }).join(' ');
+    }
+
+    function dataCurta(iso) {
+        const data = new Date(iso);
+        return Number.isNaN(data.getTime()) ? '' : data.toLocaleDateString('pt-BR');
+    }
+
+    function atualizarStatusJapones() {
+        Object.keys(CAMPOS_JAPONESES).forEach(campo => {
+            const status = document.getElementById(`status-${campo}`);
+            if (!status) return;
+            status.textContent = '';
+            const valor = elementos[campo].value.trim();
+            if (!valor) return;
+            const leitura = leituraPortuguesa(valor);
+            if (leitura) {
+                status.append('Lê-se: ');
+                const forte = document.createElement('span');
+                forte.className = 'leitura';
+                forte.textContent = leitura;
+                status.append(forte, ' · ');
+            }
+            const origem = document.createElement('span');
+            const registro = registroUsado[campo];
+            if (origemJapones[campo] === 'memoria' && registro) {
+                origem.className = 'origem-memoria';
+                origem.textContent = registro.aprovado
+                    ? `✓ aprovado pelo cliente em ${dataCurta(registro.aprovadoEm || registro.atualizadoEm)}`
+                    : `✓ usado em ${dataCurta(registro.atualizadoEm)}`;
+            } else if (origemJapones[campo] === 'manual') {
+                origem.className = 'origem-manual';
+                origem.textContent = 'digitado manualmente';
+            } else {
+                origem.textContent = 'automático';
+            }
+            status.append(origem);
+            const portugues = elementos[CAMPOS_JAPONESES[campo].portugues].value;
+            if (origemJapones[campo] === 'auto' && window.NoshigamiKatakana && window.NoshigamiKatakana.temOrigemJaponesa(portugues)) {
+                const dica = document.createElement('span');
+                dica.className = 'dica-kanji';
+                dica.textContent = ' · nome japonês: pergunte se a família usa kanji';
+                status.append(dica);
+            }
+            if (origemJapones[campo] === 'manual') {
+                const voltar = document.createElement('button');
+                voltar.type = 'button';
+                voltar.className = 'small-action voltar-automatico';
+                voltar.textContent = 'Voltar ao automático';
+                voltar.addEventListener('click', () => {
+                    origemJapones[campo] = 'auto';
+                    preencherJapones();
+                    elementos.confirmarJapones.checked = false;
+                    updatePreview();
+                });
+                status.append(voltar);
+            }
+        });
+
+        // Legenda da tela cheia e linha da folha de aprovação.
+        const partes = [];
+        const leituraFalecido = leituraPortuguesa(elementos.nomeFalecidoJapones.value);
+        const leituraFamilia = leituraPortuguesa(elementos.nomeFamiliaJapones.value);
+        if (leituraFalecido) partes.push(`falecido(a): ${leituraFalecido}`);
+        if (leituraFamilia) partes.push(`família: ${leituraFamilia}`);
+        elementos.leituraCliente.textContent = partes.length ? `Lê-se — ${partes.join(' · ')}` : '';
+        elementos.printLeitura.textContent = partes.length
+            ? `Leitura dos nomes em japonês — ${partes.join('; ')}.`
+            : '';
+    }
+
+    function exportarMemoria() {
+        if (!memoria.length) {
+            showFeedback('A memória da loja ainda está vazia.', 'info');
             return;
         }
-        try {
-            if (!window.NoshigamiKatakana) throw new Error('Módulo de katakana indisponível.');
-            const sugestao = window.NoshigamiKatakana.sugerir(origem.value);
-            const valorAtual = destino.value.trim();
-            // Nomes de origem japonesa costumam ser escritos em kanji pela
-            // família; o katakana só serve se ela não usar kanji.
-            const alertaKanji = window.NoshigamiKatakana.temOrigemJaponesa(origem.value)
-                ? '\n\nATENÇÃO: este nome parece ser de origem japonesa. Pergunte ao cliente se a família usa kanji (ex.: 山田家). Se usar, cancele e digite o kanji com o teclado japonês (IME).'
-                : '';
-            const aviso = valorAtual
-                ? `Sugestão: ${sugestao}${alertaKanji}\n\nSubstituir o valor atual “${valorAtual}”? Revise a leitura antes de salvar.`
-                : `Sugestão: ${sugestao}${alertaKanji}\n\nAplicar ao campo japonês? Revise a leitura antes de salvar.`;
-            if (!window.confirm(aviso)) return;
-            destino.value = sugestao;
-            elementos.confirmarJapones.checked = false;
-            updatePreview();
-            showFeedback('Sugestão aplicada. Revise a leitura japonesa.', 'info', 5000);
-        } catch (erro) {
-            console.error('Falha ao sugerir katakana:', erro);
-            showFeedback('Não foi possível sugerir katakana para este nome.', 'error', 5000);
-        }
-    }));
+        const blob = new Blob([JSON.stringify({ tipo: 'noshigami-memoria', versao: 1, exportadoEm: new Date().toISOString(), registros: memoria }, null, 2)],
+            { type: 'application/json;charset=utf-8' });
+        baixarBlob(blob, `noshigami-memoria-${dataLocalIso()}.json`);
+        showFeedback(`Memória exportada (${memoria.length} nomes).`, 'success');
+    }
+
+    function importarMemoria(arquivo) {
+        const leitor = new FileReader();
+        leitor.onload = () => {
+            try {
+                const dados = JSON.parse(leitor.result);
+                const registros = Array.isArray(dados) ? dados : dados && dados.registros;
+                if (!Array.isArray(registros)) throw new Error('formato inesperado');
+                const antes = memoria.length;
+                registros
+                    .filter(item => item && typeof item.nomeFalecido === 'string')
+                    .forEach(item => mesclarNaMemoria({
+                        nomeFalecido: item.nomeFalecido,
+                        nomeFamilia: String(item.nomeFamilia || ''),
+                        nomeFalecidoJapones: String(item.nomeFalecidoJapones || ''),
+                        nomeFamiliaJapones: String(item.nomeFamiliaJapones || ''),
+                        relacao: item.relacao == null ? '亡' : String(item.relacao),
+                        periodos: Array.isArray(item.periodos) ? item.periodos.map(String) : [],
+                        aprovado: Boolean(item.aprovado),
+                        aprovadoEm: String(item.aprovadoEm || ''),
+                        atualizadoEm: String(item.atualizadoEm || '')
+                    }));
+                gravarMemoria();
+                showFeedback(`Memória importada: ${memoria.length - antes} nomes novos, ${memoria.length} no total.`, 'success', 5000);
+            } catch (erro) {
+                console.error('Falha ao importar memória:', erro);
+                showFeedback('Arquivo de memória inválido.', 'error', 5000);
+            }
+        };
+        leitor.readAsText(arquivo);
+    }
+
+    document.getElementById('exportar-memoria').addEventListener('click', exportarMemoria);
+    document.getElementById('importar-memoria').addEventListener('click', () => document.getElementById('arquivo-memoria').click());
+    document.getElementById('arquivo-memoria').addEventListener('change', function () {
+        if (this.files && this.files[0]) importarMemoria(this.files[0]);
+        this.value = '';
+    });
 
     botoes.restaurarPosicoes.addEventListener('click', function () {
         aplicarPosicoesPadrao();
@@ -696,6 +985,11 @@ document.addEventListener('DOMContentLoaded', function () {
         elementos.confirmarJapones.checked = false;
         elementos.mostrarMensagem.checked = true;
         mensagemAutomatica = true;
+        Object.keys(CAMPOS_JAPONESES).forEach(campo => {
+            origemJapones[campo] = 'auto';
+            registroUsado[campo] = null;
+        });
+        ultimoRegistroAvisado = '';
         document.querySelectorAll('.error-field').forEach(campo => campo.classList.remove('error-field'));
         aplicarPosicoesPadrao();
         updatePreview();
@@ -704,8 +998,38 @@ document.addEventListener('DOMContentLoaded', function () {
             : 'Novo atendimento iniciado.', 'success');
     });
 
-    [elementos.nomeFalecido, elementos.nomeFamilia, elementos.nomeFalecidoJapones, elementos.nomeFamiliaJapones]
+    [elementos.nomeFalecido, elementos.nomeFamilia]
         .forEach(campo => campo.addEventListener('input', function () {
+            elementos.confirmarJapones.checked = false;
+            preencherJapones();
+            updatePreview();
+        }));
+    // Nome digitado todo em minúsculas ou maiúsculas recebe iniciais
+    // maiúsculas ao sair do campo; grafias mistas (McDonald) são respeitadas.
+    const PARTICULAS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'del']);
+    function formatarNomeProprio(valor) {
+        const texto = valor.replace(/\s+/g, ' ').trim();
+        if (!texto || (texto !== texto.toLowerCase() && texto !== texto.toUpperCase())) return texto;
+        return texto.toLowerCase().split(' ').map((palavra, i) =>
+            i > 0 && PARTICULAS.has(palavra) ? palavra : palavra.charAt(0).toUpperCase() + palavra.slice(1)
+        ).join(' ');
+    }
+    [elementos.nomeFalecido, elementos.nomeFamilia, elementos.nomeCliente]
+        .forEach(campo => campo.addEventListener('change', function () {
+            const formatado = formatarNomeProprio(campo.value);
+            if (formatado === campo.value) return;
+            campo.value = formatado;
+            updatePreview();
+        }));
+
+    // Digitar no campo japonês desliga o automático só daquele campo; apagar
+    // tudo devolve o campo ao automático.
+    [elementos.nomeFalecidoJapones, elementos.nomeFamiliaJapones]
+        .forEach(campo => campo.addEventListener('input', function () {
+            const vazio = !campo.value.trim();
+            origemJapones[campo.id] = vazio ? 'auto' : 'manual';
+            registroUsado[campo.id] = null;
+            if (vazio) preencherJapones();
             elementos.confirmarJapones.checked = false;
             updatePreview();
         }));
@@ -770,6 +1094,24 @@ document.addEventListener('DOMContentLoaded', function () {
         aplicarPosicoesPadrao();
         atualizarEscala();
         document.querySelectorAll('.draggable').forEach(makeDraggable);
+        // Primeira execução com memória: aproveita o histórico antigo que já
+        // tinha nomes em japonês.
+        if (!memoria.length) {
+            historyData
+                .filter(item => item && item.nomeFalecido && (item.nomeFalecidoJapones || item.nomeFamiliaJapones))
+                .forEach(item => mesclarNaMemoria({
+                    nomeFalecido: item.nomeFalecido,
+                    nomeFamilia: item.nomeFamilia || '',
+                    nomeFalecidoJapones: item.nomeFalecidoJapones || '',
+                    nomeFamiliaJapones: item.nomeFamiliaJapones || '',
+                    relacao: item.relacao == null ? '亡' : item.relacao,
+                    periodos: item.periodonumeral ? [item.periodonumeral] : [],
+                    aprovado: false,
+                    atualizadoEm: item.timestamp || ''
+                }));
+            if (memoria.length) gravarMemoria();
+        }
+        atualizarTotalMemoria();
         updatePreview();
         updateHistoryDisplay();
         if (window.ResizeObserver && stage) new ResizeObserver(atualizarEscala).observe(stage);

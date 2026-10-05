@@ -39,7 +39,9 @@ for (const etapa of ['etapa-dados', 'etapa-revisao', 'etapa-finalizacao']) {
 }
 assert.ok(html.includes('id="confirmarJapones"'), 'Confirmação de revisão japonesa ausente.');
 assert.ok(script.includes('function atualizarFluxo()'), 'Atualização dos estados do fluxo ausente.');
-assert.equal((html.match(/Sugerir katakana/g) || []).length >= 2, true, 'Botões de sugestão em katakana ausentes.');
+assert.ok(html.includes('id="status-nomeFalecidoJapones"') && html.includes('id="status-nomeFamiliaJapones"'), 'Linhas de leitura dos nomes japoneses ausentes.');
+assert.ok(script.includes('function preencherJapones()'), 'Preenchimento automático dos nomes japoneses ausente.');
+assert.ok(script.includes("registrarNaMemoria(modo === 'aprovacao')"), 'Impressão não grava a memória da loja.');
 assert.ok(html.includes('vendor/wanakana.min.js'), 'WanaKana local não está carregado.');
 assert.ok(!html.includes('unpkg.com'), 'WanaKana não pode depender de CDN.');
 assert.equal(katakana.sugerir('Maria'), 'マリア', 'Transliteração de Maria incorreta.');

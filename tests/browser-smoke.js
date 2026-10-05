@@ -93,10 +93,16 @@ function iniciarServidor() {
         await page.locator('#nomeFalecido').fill('Armando Teste');
         await page.locator('#nomeFamilia').fill('Yamada');
         await page.evaluate(() => { window.confirm = () => true; });
-        await page.locator('.katakana-action').nth(0).click();
-        await page.locator('.katakana-action').nth(1).click();
+        // Nomes em japonês são preenchidos sozinhos, sem clique.
         assert.equal(await page.locator('#nomeFalecidoJapones').inputValue(), 'アルマンド テステ');
         assert.equal(await page.locator('#nomeFamiliaJapones').inputValue(), 'ヤマダ');
+        assert.match(await page.locator('#status-nomeFamiliaJapones').textContent(), /Lê-se: Ya-ma-da/, 'Leitura em português ausente.');
+        // Digitar no campo japonês é respeitado até voltar ao automático.
+        await page.locator('#nomeFamiliaJapones').fill('山田');
+        await page.locator('#nomeFamilia').fill('Yamada');
+        assert.equal(await page.locator('#nomeFamiliaJapones').inputValue(), '山田', 'Texto manual foi sobrescrito.');
+        await page.locator('.voltar-automatico').click();
+        assert.equal(await page.locator('#nomeFamiliaJapones').inputValue(), 'ヤマダ', 'Voltar ao automático não funcionou.');
         await page.locator('#confirmarJapones').check();
         assert.equal(await page.locator('#tirar-print').isEnabled(), true, 'Finalização não foi liberada após a revisão.');
         await page.locator('#periodonumeral').selectOption('7º dia');
@@ -198,6 +204,11 @@ function iniciarServidor() {
         await page.reload({ waitUntil: 'networkidle' });
         assert.equal(await page.locator('#nomeFalecido').isVisible(), true, 'Histórico corrompido impediu a inicialização.');
         await page.locator('.help-close').click();
+        // Memória da loja: o atendimento salvo em PDF volta sozinho pelo nome do falecido.
+        await page.locator('#nomeFalecido').fill('Armando Teste');
+        assert.equal(await page.locator('#nomeFamilia').inputValue(), 'Yamada', 'Memória não preencheu a família.');
+        assert.equal(await page.locator('#nomeFalecidoJapones').inputValue(), 'アルマンド テステ', 'Memória não preencheu o nome japonês.');
+        assert.match(await page.locator('#status-nomeFalecidoJapones').textContent(), /usado em/, 'Origem da memória não indicada.');
         await page.setViewportSize({ width: 390, height: 844 });
         const larguraMobile = await page.evaluate(() => ({ viewport: window.innerWidth, pagina: document.documentElement.scrollWidth }));
         assert.ok(larguraMobile.pagina <= larguraMobile.viewport + 1, 'Layout mobile criou rolagem horizontal.');
