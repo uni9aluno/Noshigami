@@ -259,11 +259,21 @@ body[data-theme="dark"] .workflow-heading p { color: #b6c1d1; }
     font: 700 13px/1.3 Arial, sans-serif;
 }
 body[data-theme="dark"] .field-label { color: #e2e8f0; }
+/* Asterisco discreto; só fica vermelho quando o campo está faltando. */
 .required-badge {
-    color: #b42318;
-    font-size: 11px;
-    font-weight: 600;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 700;
+    margin-left: -4px;
+    margin-right: auto; /* encosta o asterisco no texto do rótulo */
 }
+.input-wrapper:has(.error-field) .required-badge { color: #b42318; }
+.required-legend {
+    margin: 0 0 12px;
+    color: #64748b;
+    font: 600 12px/1.3 Arial, sans-serif;
+}
+body[data-theme="dark"] .required-legend { color: #cbd5e1; }
 .review-checklist {
     display: flex;
     flex-wrap: wrap;
@@ -770,28 +780,12 @@ button:active {
     box-shadow: 0 2px 5px rgba(0,0,0,0.15);
 }
 
-#tirar-print {
-    background: var(--primary-gradient);
-    color: white;
-}
-#tirar-print:hover {
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-}
-
 #ocultar-traducao {
     background: var(--secondary-gradient);
     color: white;
 }
 #ocultar-traducao:hover {
     box-shadow: 0 8px 25px rgba(240, 147, 251, 0.4);
-}
-
-#exportar-txt {
-    background: var(--tertiary-gradient);
-    color: white;
-}
-#exportar-txt:hover {
-    box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4);
 }
 
 #limpar-campos {
@@ -810,16 +804,79 @@ button:active {
     box-shadow: 0 8px 25px rgba(95, 109, 122, 0.4);
 }
 
-#exportar-docx,
-#imprimir-noshigami {
+/* Finalização: uma ação principal, ações secundárias em contorno e
+   "Novo atendimento" separado, longe dos botões de impressão. */
+.final-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.final-actions .acoes-grupo {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.final-actions #imprimir-aprovacao {
+    padding: 18px 40px;
+    font-size: 17px;
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
     color: white;
 }
 
-#alternar-termo,
-#imprimir-aprovacao {
-    background: linear-gradient(135deg, #7c3aed, #a855f7);
-    color: white;
+.final-actions #imprimir-aprovacao:hover {
+    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
+}
+
+.final-actions .secundario {
+    padding: 11px 22px;
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #1d4ed8;
+    border: 2px solid #2563eb;
+    box-shadow: none;
+}
+
+.final-actions .secundario:hover {
+    background: #eff6ff;
+}
+
+body[data-theme="dark"] .final-actions .secundario {
+    background: rgba(255, 255, 255, 0.06);
+    color: #bfdbfe;
+    border-color: #60a5fa;
+}
+
+.final-actions .acoes-atendimento {
+    width: 100%;
+    margin-top: 14px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+.final-actions #limpar-campos {
+    padding: 10px 22px;
+    font-size: 14px;
+    background: transparent;
+    color: #b42318;
+    border: 2px solid rgba(180, 35, 24, 0.45);
+    box-shadow: none;
+}
+
+.final-actions #limpar-campos:hover {
+    background: rgba(254, 226, 226, 0.6);
+    box-shadow: none;
+}
+
+body[data-theme="dark"] .final-actions #limpar-campos { color: #fca5a5; border-color: rgba(252, 165, 165, 0.5); }
+
+.termo-toggle-row {
+    display: flex;
+    justify-content: flex-start;
+    margin: 18px 0 0;
 }
 
 /* Preview */
@@ -875,6 +932,56 @@ body[data-theme="dark"] #preview {
 #preview:hover {
     border-color: rgba(102, 126, 234, 0.5);
     box-shadow: inset 0 0 40px rgba(102, 126, 234, 0.15);
+}
+
+/* Tela cheia para mostrar ao cliente: só a peça, sobre fundo neutro, sem
+   arraste. A largura do stage é limitada pela altura da tela para a peça
+   inteira caber; a escala é recalculada pelo ResizeObserver do stage. */
+#sair-tela-cheia { display: none; }
+
+#preview:fullscreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 3vmin;
+    border: 0;
+    border-radius: 0;
+    background: #ece9e2;
+    box-shadow: none;
+}
+
+#preview:fullscreen #noshigami-stage {
+    width: min(100%, calc((100vh - 6vmin) * 1794 / 787));
+    max-width: none;
+}
+
+#preview:fullscreen #noshigami-canvas .draggable {
+    cursor: default;
+    outline: none;
+}
+
+#preview:fullscreen #sair-tela-cheia {
+    display: block;
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    padding: 10px 18px;
+    background: rgba(15, 23, 42, 0.55);
+    color: #fff;
+    font-size: 14px;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.6;
+    z-index: 10;
+}
+
+#preview:fullscreen #sair-tela-cheia:hover,
+#preview:fullscreen #sair-tela-cheia:focus-visible { opacity: 1; }
+
+#tela-cheia {
+    background: linear-gradient(135deg, #0f766e, #14b8a6);
+    color: white;
 }
 
 #imagemPreview {
@@ -934,6 +1041,13 @@ body[data-theme="dark"] #preview {
 body[data-theme="dark"] #texto-fixo { color: #2d3748; }
 body[data-theme="dark"] .text-container { color: #1c212b; }
 
+/* Indica que os blocos podem ser arrastados. */
+#noshigami-canvas .draggable { cursor: grab; }
+#noshigami-canvas .draggable:hover {
+    outline: 2px dashed rgba(102, 126, 234, 0.55);
+    outline-offset: 2px;
+}
+
 .draggable.dragging,
 .text-container.dragging {
     opacity: 0.75;
@@ -971,11 +1085,13 @@ body[data-theme="dark"] .text-container { color: #1c212b; }
 }
 
 /* Feedback Messages */
+/* Canto inferior direito: no topo central o aviso cobria a mensagem da prévia. */
 .feedback-message {
     position: fixed;
-    top: 20px;
-    left: 50%; /* Centralizado */
-    transform: translateX(-50%) translateY(-100px); /* Inicialmente fora da tela e centralizado */
+    right: 20px;
+    bottom: 20px;
+    max-width: min(420px, calc(100vw - 40px));
+    transform: translateY(calc(100% + 40px)); /* Inicialmente fora da tela */
     padding: 15px 25px;
     border-radius: 10px;
     color: white;
@@ -987,7 +1103,7 @@ body[data-theme="dark"] .text-container { color: #1c212b; }
 }
 
 .feedback-message.show {
-    transform: translateX(-50%) translateY(0); /* Desliza para a posição */
+    transform: translateY(0); /* Desliza para a posição */
 }
 
 .feedback-message.success {
@@ -1412,15 +1528,16 @@ body[data-theme="dark"] .history-item small.timestamp {
             <section class="help-section">
                 <h3>Etapa 3 — Botões e saídas</h3>
                 <dl class="help-fields">
-                    <dt>Salvar Noshigami</dt><dd>Abre a impressão da peça em 36,5 × 16 cm. Escolha <strong>Salvar como PDF</strong>, escala 100% e sem cabeçalhos/rodapés.</dd>
+                    <dt>Salvar em PDF</dt><dd>Abre a impressão da peça em 36,5 × 16 cm. Escolha <strong>Salvar como PDF</strong>, escala 100% e sem cabeçalhos/rodapés.</dd>
                     <dt>Ocultar Mensagem</dt><dd>Alterna rapidamente a visibilidade da mensagem.</dd>
                     <dt>Restaurar Posições</dt><dd>Retorna todos os textos às coordenadas originais da arte.</dd>
+                    <dt>Tela cheia</dt><dd>Mostra só o Noshigami, ocupando a tela, para apresentar ao cliente. Os textos não podem ser arrastados nesse modo. Saia com <kbd>Esc</kbd> ou no botão do canto.</dd>
                     <dt>Exportar Campos</dt><dd>Baixa um arquivo TXT com os valores preenchidos.</dd>
                     <dt>Exportar Word</dt><dd>Gera um DOCX editável usando o template oficial do projeto.</dd>
                     <dt>Mostrar Termo</dt><dd>Abre ou recolhe os campos e condições de aprovação.</dd>
                     <dt>Imprimir Noshigami</dt><dd>Abre a impressão física no tamanho personalizado de 36,5 × 16 cm.</dd>
                     <dt>Imprimir Aprovação e Termo</dt><dd>Gera uma folha A3 paisagem com a peça em tamanho real, dados do cliente e termo.</dd>
-                    <dt>Limpar Campos</dt><dd>Após confirmação, apaga os dados do formulário e restaura mensagem e posições padrão.</dd>
+                    <dt>Novo atendimento</dt><dd>Após confirmação, guarda o atendimento atual no histórico, limpa o formulário e restaura mensagem e posições padrão.</dd>
                 </dl>
             </section>
 
@@ -1429,7 +1546,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                 <ul>
                     <li><strong>Tema:</strong> alterna entre aparência clara e escura; a arte impressa permanece branca.</li>
                     <li><strong>Histórico:</strong> guarda localmente as 10 últimas entradas salvas ou exportadas. Clique em um item para restaurá-lo.</li>
-                    <li><kbd>Tab</kbd>: próximo campo; <kbd>Ctrl + S</kbd>: salvar em PDF; <kbd>Ctrl + L</kbd>: limpar; <kbd>Ctrl + H</kbd>: histórico; <kbd>F1</kbd>: ajuda; <kbd>Esc</kbd>: fechar painel.</li>
+                    <li><kbd>Tab</kbd>: próximo campo; <kbd>Ctrl + S</kbd>: salvar em PDF; <kbd>Alt + N</kbd>: novo atendimento; <kbd>Alt + H</kbd>: histórico; <kbd>Alt + T</kbd>: tela cheia; <kbd>F1</kbd>: ajuda; <kbd>Esc</kbd>: fechar painel.</li>
                 </ul>
                 <p class="help-note"><strong>Privacidade:</strong> tudo funciona localmente. Nenhum dado digitado é enviado para servidores externos.</p>
             </section>
@@ -1474,22 +1591,23 @@ body[data-theme="dark"] .history-item small.timestamp {
                 <div><h2 id="etapa-dados-titulo">Dados do Noshigami</h2><p>Reúna as informações do cliente e prepare a leitura japonesa.</p></div>
                 <span class="step-status blocked" id="status-dados">0 de 3 obrigatórios</span>
             </div>
+        <p class="required-legend">* Campos obrigatórios</p>
         <div id="form-container">
             <div class="form-row portugues">
                 <div class="input-wrapper">
-                    <label class="field-label" for="nomeFalecido">Nome completo do falecido <span class="required-badge">Obrigatório</span></label>
+                    <label class="field-label" for="nomeFalecido">Nome completo do falecido <span class="required-badge" title="Obrigatório" aria-label="obrigatório">*</span></label>
                     <input type="text" id="nomeFalecido" placeholder="Nome do Falecido(a)" class="required">
                     <span class="tooltip">Nome completo do falecido (obrigatório)</span>
                 </div>
                  <div class="input-wrapper">
-                    <label class="field-label" for="nomeFamilia">Nome da família <span class="required-badge">Obrigatório</span></label>
+                    <label class="field-label" for="nomeFamilia">Nome da família <span class="required-badge" title="Obrigatório" aria-label="obrigatório">*</span></label>
                     <input type="text" id="nomeFamilia" placeholder="Nome da Família" class="required">
                     <span class="tooltip">Nome da família (obrigatório)</span>
                 </div>
                 <div class="input-wrapper">
-                    <label class="field-label" for="periodonumeral">Período memorial <span class="required-badge">Obrigatório</span></label>
+                    <label class="field-label" for="periodonumeral">Período memorial <span class="required-badge" title="Obrigatório" aria-label="obrigatório">*</span></label>
                     <select id="periodonumeral" class="required">
-                        <option value="">Missa</option>
+                        <option value="">Selecione o período…</option>
                         <option value="7º dia">7º dia</option>
                         <option value="14º dia">14º dia</option>
                         <option value="21º dia">21º dia</option>
@@ -1528,7 +1646,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                 <div class="input-wrapper"> <!-- 3. Missa de (Período em Japonês) -->
                     <label class="field-label" for="periodo">Período em japonês <span>Automático</span></label>
                     <select id="periodo">
-                        <option value="">Missa</option>
+                        <option value="">Selecione o período…</option>
                         <option value="初七日忌">7º dia: 初七日忌</option>
                         <option value="二七日忌">14º dia: 二七日忌</option>
                         <option value="三七日忌">21º dia: 三七日忌</option>
@@ -1604,11 +1722,13 @@ body[data-theme="dark"] .history-item small.timestamp {
             <div class="review-toolbar">
                 <button id="ocultar-traducao">Ocultar Mensagem</button>
                 <button id="restaurar-posicoes">Restaurar Posições</button>
+                <button id="tela-cheia" title="Mostrar só o Noshigami em tela cheia (Alt+T)">Tela cheia</button>
             </div>
 
             <!-- O stage é fluido; o canvas interno tem tamanho fixo (1794x787 unidades
                  de design) e é escalado por JS. Nenhuma posição depende da resolução. -->
             <div id="preview">
+                <button type="button" id="sair-tela-cheia">Sair da tela cheia (Esc)</button>
                 <div id="noshigami-stage">
                     <div id="noshigami-canvas">
                         <img id="imagemPreview" src="Noshigami.jpg" alt="Pré-visualização do noshigami">
@@ -1634,6 +1754,9 @@ body[data-theme="dark"] .history-item small.timestamp {
                 Confirmo que revisei os nomes em japonês e a prévia com o cliente.
             </label>
 
+        <div class="termo-toggle-row">
+            <button type="button" class="small-action" id="alternar-termo" aria-expanded="false" aria-controls="termo-compromisso">Mostrar Termo</button>
+        </div>
         <section class="termo-panel" id="termo-compromisso" hidden aria-labelledby="termo-titulo">
             <h2 id="termo-titulo">Termo de Compromisso</h2>
             <p>O cliente da Tenman-ya se compromete a escolher um modelo para a impressão do Noshigami e não poderá alterá-lo após a confirmação.</p>
@@ -1653,14 +1776,19 @@ body[data-theme="dark"] .history-item small.timestamp {
             </label>
         </section>
 
-        <div class="button-group final-actions">
-            <button id="tirar-print" class="primary-action">Salvar Noshigami em PDF</button>
-            <button id="exportar-txt">Exportar Campos</button>
-            <button id="exportar-docx">Exportar Word (.docx)</button>
-            <button id="alternar-termo" aria-expanded="false" aria-controls="termo-compromisso">Mostrar Termo</button>
-            <button id="imprimir-noshigami">Imprimir Noshigami</button>
-            <button id="imprimir-aprovacao">Imprimir Aprovação e Termo</button>
-            <button id="limpar-campos">Limpar Campos</button>
+        <div class="final-actions">
+            <div class="acoes-grupo acoes-principais">
+                <button id="imprimir-aprovacao">Imprimir Aprovação e Termo</button>
+            </div>
+            <div class="acoes-grupo acoes-secundarias">
+                <button id="imprimir-noshigami" class="secundario">Imprimir Noshigami</button>
+                <button id="tirar-print" class="secundario">Salvar em PDF</button>
+                <button id="exportar-docx" class="secundario">Exportar Word (.docx)</button>
+                <button id="exportar-txt" class="secundario">Exportar Campos</button>
+            </div>
+            <div class="acoes-grupo acoes-atendimento">
+                <button id="limpar-campos" title="Guarda o atendimento atual no histórico e limpa o formulário (Alt+N)">Novo atendimento</button>
+            </div>
         </div>
         </section>
     </div>

@@ -34,6 +34,8 @@ document.addEventListener('DOMContentLoaded', function () {
         restaurarMensagem: document.getElementById('restaurar-mensagem'),
         limpar: document.getElementById('limpar-campos'),
         restaurarPosicoes: document.getElementById('restaurar-posicoes'),
+        telaCheia: document.getElementById('tela-cheia'),
+        sairTelaCheia: document.getElementById('sair-tela-cheia'),
         exportarTxt: document.getElementById('exportar-txt'),
         exportarDocx: document.getElementById('exportar-docx'),
         alternarTermo: document.getElementById('alternar-termo'),
@@ -348,6 +350,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let origemTop = 0;
         let arrastando = false;
         element.addEventListener('pointerdown', function (evento) {
+            if (document.fullscreenElement) return; // na tela do cliente nada se move
             if (evento.button !== 0 && evento.pointerType === 'mouse') return;
             evento.preventDefault();
             arrastando = true;
@@ -629,8 +632,41 @@ document.addEventListener('DOMContentLoaded', function () {
         botoes.alternarTermo.textContent = aberto ? 'Ocultar Termo' : 'Mostrar Termo';
         botoes.alternarTermo.setAttribute('aria-expanded', String(aberto));
     });
+    // Tela cheia para mostrar ao cliente. A Fullscreen API é aplicada ao
+    // próprio #preview: um position: fixed não serviria, porque o .container
+    // usa backdrop-filter/transform e prenderia o elemento dentro dele.
+    function alternarTelaCheia() {
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+            return;
+        }
+        const preview = document.getElementById('preview');
+        if (!preview.requestFullscreen) {
+            showFeedback('Este navegador não permite tela cheia.', 'error');
+            return;
+        }
+        preview.requestFullscreen().catch(erro => {
+            console.warn('Não foi possível abrir a tela cheia:', erro);
+            showFeedback('Não foi possível abrir a tela cheia.', 'error');
+        });
+    }
+    botoes.telaCheia.addEventListener('click', alternarTelaCheia);
+    botoes.sairTelaCheia.addEventListener('click', alternarTelaCheia);
+    document.addEventListener('fullscreenchange', atualizarEscala);
+
+    function temDadosDoAtendimento() {
+        return [elementos.nomeFalecido, elementos.nomeFamilia, elementos.nomeFalecidoJapones,
+            elementos.nomeFamiliaJapones, elementos.periodoNumeral]
+            .some(campo => String(campo.value || '').trim());
+    }
+
     botoes.limpar.addEventListener('click', function () {
-        if (!window.confirm('Deseja realmente limpar todos os campos?')) return;
+        const guardar = temDadosDoAtendimento();
+        const pergunta = guardar
+            ? 'Iniciar um novo atendimento? Os dados atuais serão guardados no histórico.'
+            : 'Iniciar um novo atendimento?';
+        if (!window.confirm(pergunta)) return;
+        if (guardar) saveToHistory();
         elementos.nomeFalecido.value = '';
         elementos.nomeFalecidoJapones.value = '';
         elementos.periodoNumeral.value = '';
@@ -647,7 +683,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.error-field').forEach(campo => campo.classList.remove('error-field'));
         aplicarPosicoesPadrao();
         updatePreview();
-        showFeedback('Campos limpos e posições restauradas.', 'success');
+        showFeedback(guardar
+            ? 'Novo atendimento iniciado. O anterior está no histórico.'
+            : 'Novo atendimento iniciado.', 'success');
     });
 
     [elementos.nomeFalecido, elementos.nomeFamilia, elementos.nomeFalecidoJapones, elementos.nomeFamiliaJapones]
@@ -676,13 +714,19 @@ document.addEventListener('DOMContentLoaded', function () {
             evento.preventDefault();
             botoes.salvar.click();
         }
-        if (evento.ctrlKey && evento.key.toLowerCase() === 'l') {
+        // Alt em vez de Ctrl: Ctrl+L e Ctrl+H já são atalhos do navegador.
+        // evento.code mantém o atalho independente do layout do teclado.
+        if (evento.altKey && !evento.ctrlKey && evento.code === 'KeyN') {
             evento.preventDefault();
             botoes.limpar.click();
         }
-        if (evento.ctrlKey && evento.key.toLowerCase() === 'h') {
+        if (evento.altKey && !evento.ctrlKey && evento.code === 'KeyH') {
             evento.preventDefault();
             window.toggleHistory();
+        }
+        if (evento.altKey && !evento.ctrlKey && evento.code === 'KeyT') {
+            evento.preventDefault();
+            alternarTelaCheia();
         }
         if (evento.key === 'F1') {
             evento.preventDefault();
