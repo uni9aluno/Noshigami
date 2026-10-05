@@ -181,9 +181,20 @@ document.addEventListener('DOMContentLoaded', function () {
         elementos.periodoNumeral.value = item ? item.portugues : '';
     }
 
+    // Monta só as partes já preenchidas: com o formulário vazio a prévia
+    // mostrava "Missa de de ." para o cliente.
     function mensagemPadrao() {
-        return `Missa de ${elementos.periodoNumeral.value} de ${elementos.nomeFalecido.value}.\n` +
-            `A Família ${elementos.nomeFamilia.value} agradece as condolências recebidas`;
+        const periodo = elementos.periodoNumeral.value.trim();
+        const falecido = elementos.nomeFalecido.value.trim();
+        const familia = elementos.nomeFamilia.value.trim();
+        if (!periodo && !falecido && !familia) return '';
+        const missa = [periodo, falecido].filter(Boolean).join(' de ');
+        const linhas = [];
+        if (missa) linhas.push(`Missa de ${missa}.`);
+        linhas.push(familia
+            ? `A Família ${familia} agradece as condolências recebidas`
+            : 'A família agradece as condolências recebidas');
+        return linhas.join('\n');
     }
 
     function atualizarMensagemAutomatica() {

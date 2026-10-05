@@ -43,10 +43,16 @@
     ]);
 
     // Nomes brasileiros que, por acaso, também formam romaji válido. Sem esta
-    // lista, Regina sairia レギナ em vez de レジナ.
+    // lista, Regina sairia レギナ em vez de レジナ, e Maria ou Souza
+    // disparariam o alerta de kanji como se fossem japoneses.
     const NOMES_PORTUGUESES = new Set([
         'regina', 'regiane', 'gina', 'geni', 'genaro', 'gerusa', 'higino',
-        'rogerio', 'eugenio', 'chico', 'rocha', 'machado', 'nogueira'
+        'rogerio', 'eugenio', 'chico', 'rocha', 'machado', 'nogueira',
+        'maria', 'mariana', 'marina', 'karina', 'ana', 'rosa', 'rosana',
+        'tereza', 'teresa', 'sonia', 'tania', 'neusa', 'iara', 'ione', 'mara',
+        'rita', 'irene', 'simone', 'renata', 'renato', 'denise', 'amanda',
+        'miranda', 'sara', 'tamara', 'samara', 'souza', 'sousa', 'pereira',
+        'ribeiro', 'moreira'
     ]);
 
     // No Brasil, sobrenomes japoneses costumam ser grafados sem a vogal longa:
@@ -57,7 +63,10 @@
         endo: 'endou', kondo: 'kondou', ando: 'andou', naito: 'naitou',
         kudo: 'kudou', sudo: 'sudou', muto: 'mutou', shoji: 'shouji',
         ota: 'oota', oshiro: 'ooshiro', otsuka: 'ootsuka', oyama: 'ooyama',
-        okubo: 'ookubo', onishi: 'oonishi', ryu: 'ryuu'
+        okubo: 'ookubo', onishi: 'oonishi', ryu: 'ryuu', kinjo: 'kinjou',
+        yoko: 'youko', kyoko: 'kyouko', yuko: 'yuuko', ryoko: 'ryouko',
+        shoko: 'shouko', taro: 'tarou', jiro: 'jirou', ichiro: 'ichirou',
+        saburo: 'saburou', goro: 'gorou'
     });
 
     // Acentos do português (macrons como ō são romanização japonesa).
@@ -80,21 +89,30 @@
         if (EXCECOES[original]) return EXCECOES[original];
 
         let palavra = original
+            .replace(/th/g, 't') // Thiago → チアゴ
             .replace(/tch/g, 'ch')
             .replace(/nh/g, 'ny')
             .replace(/lh/g, 'ry')
             .replace(/ch/g, 'sh')
-            .replace(/rr/g, 'h')
+            // "rr" vira レ/ラ na grafia japonesa (Ferreira → フェレイラ),
+            // embora soe como "h" no português.
+            .replace(/rr/g, 'r')
             .replace(/ss/g, 's')
             .replace(/qu(?=[ei])/g, 'k')
-            .replace(/gu(?=[ei])/g, 'g')
+            // "gu" antes de e/i é o som de "g" duro: marca com G para que a
+            // regra seguinte (g + e/i → j) não o transforme (Rodrigues → ロドリゲス).
+            .replace(/gu(?=[ei])/g, 'G')
             .replace(/c(?=[ei])/g, 's')
             .replace(/g(?=[ei])/g, 'j')
+            .replace(/G/g, 'g')
             .replace(/c/g, 'k')
             .replace(/q/g, 'k')
             .replace(/x/g, 'sh')
             .replace(/l/g, 'r')
-            .replace(/w/g, 'u');
+            // Grafia mais usada no Brasil: Silva → シルバ, não シルヴァ.
+            .replace(/v/g, 'b')
+            .replace(/w/g, 'u')
+            .replace(/z$/, 's'); // Luiz → ルイス
 
         let resultado = '';
         for (let i = 0; i < palavra.length; i += 1) {
@@ -117,7 +135,13 @@
                 resultado += atual;
             }
         }
-        return resultado;
+        // Sons do português que o romaji Hepburn não tem: "du"/"tu" viram
+        // ドゥ/トゥ (o WanaKana daria ヅ/ツ, lidos "zu"/"tsu") e "di" vira ジ,
+        // como em Diego → ジエゴ.
+        return resultado
+            .replace(/du/g, 'dwu')
+            .replace(/tu/g, 'twu')
+            .replace(/di/g, 'ji');
     }
 
     /* Devolve a palavra normalizada se ela for romaji Hepburn válido, ou null.

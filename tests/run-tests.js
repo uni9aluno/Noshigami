@@ -53,6 +53,10 @@ const leiturasEsperadas = {
     Shigeru: 'シゲル', Gen: 'ゲン', Hattori: 'ハットリ', Homma: 'ホンマ',
     Ohno: 'オオノ', 'Satō': 'サトウ', Sato: 'サトウ', Ito: 'イトウ', Oshiro: 'オオシロ',
     Yamada: 'ヤマダ', Takahashi: 'タカハシ',
+    Silva: 'シルバ', 'Gonçalves': 'ゴンサルベス', Vitor: 'ビトル', Oliveira: 'オリベイラ',
+    Eduardo: 'エドゥアルド', Thiago: 'チアゴ', Guilherme: 'ギリェルメ', Rodrigues: 'ロドリゲス',
+    Nogueira: 'ノゲイラ', Ferreira: 'フェレイラ', Luiz: 'ルイス', Diego: 'ジエゴ',
+    Kinjo: 'キンジョウ', Yoko: 'ヨウコ', Taro: 'タロウ',
     Regina: 'レジナ', 'Rogério': 'ロジェリオ', Rocha: 'ロシャ', Machado: 'マシャド',
     'Gerônimo Tacachi Iwamoto': 'ジェロニモ タカシ イワモト', 'Maria Yamada': 'マリア ヤマダ'
 };
@@ -61,6 +65,8 @@ Object.entries(leiturasEsperadas).forEach(([nome, esperado]) => {
 });
 assert.equal(katakana.temOrigemJaponesa('Maria Yamada'), true, 'Sobrenome japonês não detectado.');
 assert.equal(katakana.temOrigemJaponesa('Armando Silva'), false, 'Nome português classificado como japonês.');
+assert.equal(katakana.temOrigemJaponesa('Maria Souza'), false, 'Maria Souza não deve disparar o alerta de kanji.');
+assert.equal(katakana.temOrigemJaponesa('Ana Pereira Ribeiro'), false, 'Ana Pereira Ribeiro não deve disparar o alerta de kanji.');
 assert.ok(html.includes('id="tirar-print"'), 'Botão para salvar o Noshigami ausente.');
 assert.ok(!html.includes('id="capturar-imagem"'), 'Botão de captura de imagem ainda está presente.');
 assert.ok(script.includes("imprimir('noshigami', 'pdf')"), 'Botão Salvar Noshigami não aciona o fluxo de PDF.');
