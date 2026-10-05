@@ -8,6 +8,7 @@ const JSZip = require('../vendor/jszip.min.js');
 const exporter = require('../docx-export.js');
 global.wanakana = require('../vendor/wanakana.min.js');
 const katakana = require('../katakana-transliterator.js');
+const kanjiNomes = require('../kanji-nomes.js');
 
 const raiz = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
@@ -40,7 +41,18 @@ for (const etapa of ['etapa-dados', 'etapa-revisao', 'etapa-finalizacao']) {
 assert.ok(html.includes('id="confirmarJapones"'), 'Confirmação de revisão japonesa ausente.');
 assert.ok(script.includes('function atualizarFluxo()'), 'Atualização dos estados do fluxo ausente.');
 assert.ok(html.includes('id="status-nomeFalecidoJapones"') && html.includes('id="status-nomeFamiliaJapones"'), 'Linhas de leitura dos nomes japoneses ausentes.');
-assert.ok(script.includes('function preencherJapones()'), 'Preenchimento automático dos nomes japoneses ausente.');
+assert.ok(script.includes('function preencherJapones('), 'Preenchimento automático dos nomes japoneses ausente.');
+assert.ok(html.includes('kanji-nomes.js') && html.includes('id="escolha-kanji"'), 'Escolha de kanji pelo cliente ausente.');
+// Opções de kanji: grafias de cartório, vogais longas e okinawanos encontram a leitura.
+const kanjiEsperado = [
+    ['Watanabe', 'sobrenome', '渡辺'], ['Satoh', 'sobrenome', '佐藤'], ['Satou', 'sobrenome', '佐藤'],
+    ['Kanashiro', 'sobrenome', '金城'], ['Kinjo', 'sobrenome', '金城'], ['Higa', 'sobrenome', '比嘉'],
+    ['Tacachi', 'nome', '隆'], ['Sigueru', 'nome', '茂'], ['Hiroshi', 'nome', '博']
+];
+kanjiEsperado.forEach(([palavra, preferencia, kanji]) => {
+    assert.ok(kanjiNomes.candidatos(palavra, preferencia).kanji.includes(kanji), `Kanji ${kanji} ausente para ${palavra}.`);
+});
+assert.equal(kanjiNomes.candidatos('Silva').kanji.length, 0, 'Nome português não deve ter opções de kanji.');
 assert.ok(script.includes("registrarNaMemoria(modo === 'aprovacao')"), 'Impressão não grava a memória da loja.');
 assert.ok(html.includes('vendor/wanakana.min.js'), 'WanaKana local não está carregado.');
 assert.ok(!html.includes('unpkg.com'), 'WanaKana não pode depender de CDN.');

@@ -182,20 +182,16 @@ document.addEventListener('DOMContentLoaded', function () {
         elementos.periodoNumeral.value = item ? item.portugues : '';
     }
 
-    // Monta só as partes já preenchidas: com o formulário vazio a prévia
-    // mostrava "Missa de de ." para o cliente.
+    // A mensagem padrão está sempre presente; o que ainda não foi preenchido
+    // aparece como marcador ("[nome do falecido]") em vez de lacuna, que
+    // antes gerava "Missa de de .". A impressão continua bloqueada até os
+    // campos obrigatórios serem preenchidos, então o marcador não sai na peça.
     function mensagemPadrao() {
-        const periodo = elementos.periodoNumeral.value.trim();
-        const falecido = elementos.nomeFalecido.value.trim();
-        const familia = elementos.nomeFamilia.value.trim();
-        if (!periodo && !falecido && !familia) return '';
-        const missa = [periodo, falecido].filter(Boolean).join(' de ');
-        const linhas = [];
-        if (missa) linhas.push(`Missa de ${missa}.`);
-        linhas.push(familia
-            ? `A Família ${familia} agradece as condolências recebidas`
-            : 'A família agradece as condolências recebidas');
-        return linhas.join('\n');
+        const periodo = elementos.periodoNumeral.value.trim() || '[período]';
+        const falecido = elementos.nomeFalecido.value.trim() || '[nome do falecido]';
+        const familia = elementos.nomeFamilia.value.trim() || '[família]';
+        return `Missa de ${periodo} de ${falecido}.\n` +
+            `A Família ${familia} agradece as condolências recebidas`;
     }
 
     function atualizarMensagemAutomatica() {
@@ -318,8 +314,11 @@ document.addEventListener('DOMContentLoaded', function () {
             origemJapones[campo] = temValor ? 'memoria' : 'auto';
             registroUsado[campo] = temValor ? { aprovado: false, atualizadoEm: data.timestamp } : null;
         });
+        familiaAutomatica = !elementos.nomeFamilia.value.trim() || elementos.nomeFamilia.value.trim() === sobrenomeDe(elementos.nomeFalecido.value);
         if (!elementos.nomeFalecidoJapones.value.trim() || !elementos.nomeFamiliaJapones.value.trim()) preencherJapones();
-        if (Object.prototype.hasOwnProperty.call(data, 'mensagem')) {
+        // Mensagem guardada igual à padrão continua automática: assim ela
+        // acompanha os nomes se o vendedor mudar algo, sem reescrever.
+        if (Object.prototype.hasOwnProperty.call(data, 'mensagem') && data.mensagem !== mensagemPadrao()) {
             elementos.mensagem.value = data.mensagem || '';
             mensagemAutomatica = false;
         } else {
@@ -705,7 +704,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function buscarFalecido() {
         const falecido = normalizarNome(elementos.nomeFalecido.value);
         if (falecido.length < 3) return null;
-        const familia = normalizarNome(elementos.nomeFamilia.value);
+        // Família derivada do sobrenome não serve de filtro: a família do
+        // registro pode ser outra (ex.: nora com o sobrenome do marido).
+        const familia = familiaAutomatica ? '' : normalizarNome(elementos.nomeFamilia.value);
         for (let i = memoria.length - 1; i >= 0; i -= 1) {
             const item = memoria[i];
             if (normalizarNome(item.nomeFalecido) !== falecido) continue;
@@ -737,12 +738,29 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function preencherJapones() {
+    /* Nome da família preenchido sozinho com o sobrenome do falecido
+       ("Shigeru Watanabe" → "Watanabe", "Maria das Dores da Silva" → "Silva")
+       enquanto o vendedor não digitar outra coisa nele. */
+    let familiaAutomatica = true;
+    function sobrenomeDe(nomeCompleto) {
+        const palavras = nomeCompleto.replace(/\s+/g, ' ').trim().split(' ')
+            .filter(palavra => !PARTICULAS.has(palavra.toLowerCase()));
+        return palavras.length > 1 ? palavras[palavras.length - 1] : '';
+    }
+    function preencherFamiliaAutomatica() {
+        if (familiaAutomatica) elementos.nomeFamilia.value = sobrenomeDe(elementos.nomeFalecido.value);
+    }
+
+    /* alterados: campos em português que acabaram de mudar. Um nome
+       escolhido pelo cliente só é refeito se o nome em português dele mudou. */
+    function preencherJapones(alterados) {
         const falecido = buscarFalecido();
         if (falecido) {
             // Mesma pessoa digitada sem capricho ("shigeru watanabe"): usa a grafia guardada.
             if (elementos.nomeFalecido.value.trim() !== falecido.nomeFalecido) elementos.nomeFalecido.value = falecido.nomeFalecido;
-            if (!elementos.nomeFamilia.value.trim() && falecido.nomeFamilia) elementos.nomeFamilia.value = falecido.nomeFamilia;
+            if (falecido.nomeFamilia && (familiaAutomatica || !elementos.nomeFamilia.value.trim())) {
+                elementos.nomeFamilia.value = falecido.nomeFamilia;
+            }
             // O parentesco é do falecido: só troca se ainda estiver no padrão.
             if (elementos.relacao.value === '亡' && falecido.relacao != null) elementos.relacao.value = falecido.relacao;
         }
@@ -751,6 +769,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         Object.entries(CAMPOS_JAPONESES).forEach(([campo, config]) => {
             if (origemJapones[campo] === 'manual') return;
+            if (origemJapones[campo] === 'cliente' && alterados && !alterados.includes(config.portugues)) return;
             const registro = registros[campo];
             if (registro && registro[config.memoria]) {
                 elementos[campo].value = registro[config.memoria];
@@ -804,6 +823,154 @@ document.addEventListener('DOMContentLoaded', function () {
         return Number.isNaN(data.getTime()) ? '' : data.toLocaleDateString('pt-BR');
     }
 
+    /* -----------------------------------------------------------------------
+       ESCOLHA DO KANJI PELO CLIENTE
+       Para cada palavra do nome que tem grafias conhecidas em kanji
+       (kanji-nomes.js), a tela cheia mostra cartões grandes: o katakana
+       ("Não sei", já marcado) e os kanji. O cliente aponta; o vendedor só
+       toca e confirma. Com kanji, o nome segue a ordem japonesa — sobrenome
+       primeiro e sem espaço (渡辺茂); só em katakana, fica como digitado.
+       ----------------------------------------------------------------------- */
+    const escolhaKanji = {
+        painel: document.getElementById('escolha-kanji'),
+        linhas: document.getElementById('escolha-kanji-linhas'),
+        resultado: document.getElementById('escolha-resultado'),
+        confirmar: document.getElementById('escolha-confirmar')
+    };
+    const escolhas = new Map(); // palavra normalizada → kanji escolhido ('' = katakana)
+    let camposEscolha = [];
+
+    function palavrasDe(texto) {
+        return String(texto || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+    }
+
+    function ehSobrenome(palavra) {
+        const chave = normalizarNome(palavra);
+        if (palavrasDe(elementos.nomeFamilia.value).some(p => normalizarNome(p) === chave)) return true;
+        const doFalecido = palavrasDe(elementos.nomeFalecido.value).filter(p => !PARTICULAS.has(p.toLowerCase()));
+        return doFalecido.length > 1 && normalizarNome(doFalecido[doFalecido.length - 1]) === chave;
+    }
+
+    function linhasEscolhaKanji(campos) {
+        if (!window.NoshigamiKanji) return [];
+        const permitidos = campos || Object.keys(CAMPOS_JAPONESES).filter(c => origemJapones[c] === 'auto');
+        const linhas = [];
+        permitidos.forEach(campo => {
+            const familia = campo === 'nomeFamiliaJapones';
+            palavrasDe(elementos[CAMPOS_JAPONESES[campo].portugues].value).forEach(palavra => {
+                const chave = normalizarNome(palavra);
+                if (linhas.some(linha => linha.chave === chave)) return;
+                const preferencia = familia || ehSobrenome(palavra) ? 'sobrenome' : 'nome';
+                const { kanji } = window.NoshigamiKanji.candidatos(palavra, preferencia);
+                if (kanji.length) linhas.push({ chave, palavra, kanji });
+            });
+        });
+        return linhas;
+    }
+
+    function comporNome(campo) {
+        const fonte = elementos[CAMPOS_JAPONESES[campo].portugues].value;
+        const partes = palavrasDe(fonte).map(palavra => ({
+            palavra,
+            kanji: escolhas.get(normalizarNome(palavra)) || '',
+            sobrenome: campo === 'nomeFamiliaJapones' || ehSobrenome(palavra)
+        }));
+        if (!partes.some(parte => parte.kanji)) return katakanaAutomatico(fonte);
+        return [...partes.filter(p => p.sobrenome), ...partes.filter(p => !p.sobrenome)]
+            .map(parte => parte.kanji || katakanaAutomatico(parte.palavra))
+            .join('');
+    }
+
+    function atualizarResultadoEscolha() {
+        const partes = camposEscolha.map(campo => {
+            const nome = comporNome(campo);
+            return campo === 'nomeFamiliaJapones' && nome ? nome + '家' : nome;
+        }).filter(Boolean);
+        escolhaKanji.resultado.textContent = partes.join('   ·   ');
+    }
+
+    function criarOpcao(linha, valor, escrita, legenda) {
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'escolha-opcao';
+        botao.dataset.valor = valor;
+        botao.setAttribute('aria-pressed', String((escolhas.get(linha.chave) || '') === valor));
+        const texto = document.createElement('span');
+        texto.className = 'escrita';
+        texto.textContent = escrita;
+        const rotulo = document.createElement('span');
+        rotulo.className = 'legenda';
+        rotulo.textContent = legenda;
+        botao.append(texto, rotulo);
+        botao.addEventListener('click', () => {
+            escolhas.set(linha.chave, valor);
+            botao.parentElement.querySelectorAll('.escolha-opcao')
+                .forEach(opcao => opcao.setAttribute('aria-pressed', String(opcao === botao)));
+            atualizarResultadoEscolha();
+        });
+        return botao;
+    }
+
+    function abrirEscolhaKanji(campos) {
+        camposEscolha = campos || Object.keys(CAMPOS_JAPONESES)
+            .filter(c => origemJapones[c] === 'auto' || origemJapones[c] === 'cliente');
+        const linhas = linhasEscolhaKanji(camposEscolha);
+        if (!linhas.length) {
+            abrirTelaCheia();
+            return;
+        }
+        escolhaKanji.linhas.textContent = '';
+        escolhas.clear();
+        // Pré-seleciona o que já estiver nos campos (o cliente reabrindo para
+        // trocar); nos demais casos começa em "Não sei".
+        const atual = camposEscolha.map(c => elementos[c].value).join(' ');
+        linhas.forEach(linha => {
+            escolhas.set(linha.chave, linha.kanji.find(k => atual.includes(k)) || '');
+            const bloco = document.createElement('div');
+            bloco.className = 'escolha-linha';
+            const titulo = document.createElement('p');
+            titulo.className = 'escolha-palavra';
+            titulo.textContent = linha.palavra;
+            const opcoes = document.createElement('div');
+            opcoes.className = 'escolha-opcoes';
+            opcoes.append(criarOpcao(linha, '', katakanaAutomatico(linha.palavra) || linha.palavra, 'Não sei / sem kanji'));
+            linha.kanji.forEach(kanji => opcoes.append(criarOpcao(linha, kanji, kanji, 'kanji')));
+            bloco.append(titulo, opcoes);
+            escolhaKanji.linhas.append(bloco);
+        });
+        atualizarResultadoEscolha();
+        escolhaKanji.painel.hidden = false;
+        if (!document.fullscreenElement) abrirTelaCheia();
+        escolhaKanji.confirmar.focus();
+    }
+
+    escolhaKanji.confirmar.addEventListener('click', () => {
+        camposEscolha.forEach(campo => {
+            elementos[campo].value = comporNome(campo);
+            origemJapones[campo] = 'cliente';
+            registroUsado[campo] = null;
+        });
+        // O cliente acabou de escolher olhando a peça: a revisão está feita.
+        elementos.confirmarJapones.checked = true;
+        escolhaKanji.painel.hidden = true;
+        updatePreview();
+        showFeedback('Escolha do cliente aplicada ao Noshigami.', 'success');
+    });
+
+    // Sair da tela cheia com a escolha aberta cancela sem mudar nada.
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement) escolhaKanji.painel.hidden = true;
+    });
+
+    // Kanji não tem leitura automática: nesse caso vale a pronúncia do nome
+    // em português (o katakana dele), para o cliente seguir conferindo pelo som.
+    function leituraDoCampo(campo) {
+        const valor = elementos[campo].value;
+        const direta = leituraPortuguesa(valor);
+        if (direta || !valor.trim()) return direta;
+        return leituraPortuguesa(katakanaAutomatico(elementos[CAMPOS_JAPONESES[campo].portugues].value));
+    }
+
     function atualizarStatusJapones() {
         Object.keys(CAMPOS_JAPONESES).forEach(campo => {
             const status = document.getElementById(`status-${campo}`);
@@ -811,7 +978,7 @@ document.addEventListener('DOMContentLoaded', function () {
             status.textContent = '';
             const valor = elementos[campo].value.trim();
             if (!valor) return;
-            const leitura = leituraPortuguesa(valor);
+            const leitura = leituraDoCampo(campo);
             if (leitura) {
                 status.append('Lê-se: ');
                 const forte = document.createElement('span');
@@ -826,6 +993,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 origem.textContent = registro.aprovado
                     ? `✓ aprovado pelo cliente em ${dataCurta(registro.aprovadoEm || registro.atualizadoEm)}`
                     : `✓ usado em ${dataCurta(registro.atualizadoEm)}`;
+            } else if (origemJapones[campo] === 'cliente') {
+                origem.className = 'origem-cliente';
+                origem.textContent = '✓ escolhido pelo cliente';
             } else if (origemJapones[campo] === 'manual') {
                 origem.className = 'origem-manual';
                 origem.textContent = 'digitado manualmente';
@@ -834,7 +1004,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             status.append(origem);
             const portugues = elementos[CAMPOS_JAPONESES[campo].portugues].value;
-            if (origemJapones[campo] === 'auto' && window.NoshigamiKatakana && window.NoshigamiKatakana.temOrigemJaponesa(portugues)) {
+            if (origemJapones[campo] === 'auto' && linhasEscolhaKanji([campo]).length) {
+                // Há grafias em kanji conhecidas: um toque leva a escolha ao cliente.
+                const perguntar = document.createElement('button');
+                perguntar.type = 'button';
+                perguntar.className = 'small-action perguntar-kanji';
+                perguntar.textContent = 'Mostrar opções de kanji ao cliente';
+                perguntar.addEventListener('click', () => abrirEscolhaKanji());
+                status.append(perguntar);
+            } else if (origemJapones[campo] === 'auto' && window.NoshigamiKatakana && window.NoshigamiKatakana.temOrigemJaponesa(portugues)) {
                 const dica = document.createElement('span');
                 dica.className = 'dica-kanji';
                 dica.textContent = ' · nome japonês: pergunte se a família usa kanji';
@@ -857,11 +1035,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Legenda da tela cheia e linha da folha de aprovação.
         const partes = [];
-        const leituraFalecido = leituraPortuguesa(elementos.nomeFalecidoJapones.value);
-        const leituraFamilia = leituraPortuguesa(elementos.nomeFamiliaJapones.value);
+        const leituraFalecido = leituraDoCampo('nomeFalecidoJapones');
+        const leituraFamilia = leituraDoCampo('nomeFamiliaJapones');
         if (leituraFalecido) partes.push(`falecido(a): ${leituraFalecido}`);
         if (leituraFamilia) partes.push(`família: ${leituraFamilia}`);
-        elementos.leituraCliente.textContent = partes.length ? `Lê-se — ${partes.join(' · ')}` : '';
+        // Cada nome num bloco que não quebra: a linha só quebra entre nomes.
+        elementos.leituraCliente.textContent = '';
+        if (partes.length) {
+            elementos.leituraCliente.append('Lê-se — ');
+            partes.forEach((parte, i) => {
+                const bloco = document.createElement('span');
+                bloco.style.whiteSpace = 'nowrap';
+                bloco.textContent = parte;
+                elementos.leituraCliente.append(...(i ? [' · ', bloco] : [bloco]));
+            });
+        }
         elementos.printLeitura.textContent = partes.length
             ? `Leitura dos nomes em japonês — ${partes.join('; ')}.`
             : '';
@@ -945,6 +1133,15 @@ document.addEventListener('DOMContentLoaded', function () {
             document.exitFullscreen().catch(() => {});
             return;
         }
+        // Se ainda há nomes com kanji possível, a tela cheia já abre com a
+        // escolha para o cliente: o vendedor não precisa lembrar de perguntar.
+        if (linhasEscolhaKanji().length) {
+            abrirEscolhaKanji();
+            return;
+        }
+        abrirTelaCheia();
+    }
+    function abrirTelaCheia() {
         const preview = document.getElementById('preview');
         if (!preview.requestFullscreen) {
             showFeedback('Este navegador não permite tela cheia.', 'error');
@@ -990,6 +1187,7 @@ document.addEventListener('DOMContentLoaded', function () {
             registroUsado[campo] = null;
         });
         ultimoRegistroAvisado = '';
+        familiaAutomatica = true;
         document.querySelectorAll('.error-field').forEach(campo => campo.classList.remove('error-field'));
         aplicarPosicoesPadrao();
         updatePreview();
@@ -998,12 +1196,21 @@ document.addEventListener('DOMContentLoaded', function () {
             : 'Novo atendimento iniciado.', 'success');
     });
 
-    [elementos.nomeFalecido, elementos.nomeFamilia]
-        .forEach(campo => campo.addEventListener('input', function () {
-            elementos.confirmarJapones.checked = false;
-            preencherJapones();
-            updatePreview();
-        }));
+    elementos.nomeFalecido.addEventListener('input', function () {
+        elementos.confirmarJapones.checked = false;
+        const familiaMudou = familiaAutomatica;
+        preencherFamiliaAutomatica();
+        preencherJapones(familiaMudou ? ['nomeFalecido', 'nomeFamilia'] : ['nomeFalecido']);
+        updatePreview();
+    });
+    // Digitar na família desliga o preenchimento pelo sobrenome; apagar o
+    // campo religa (volta a valer na próxima mudança do nome do falecido).
+    elementos.nomeFamilia.addEventListener('input', function () {
+        familiaAutomatica = !elementos.nomeFamilia.value.trim();
+        elementos.confirmarJapones.checked = false;
+        preencherJapones(['nomeFamilia']);
+        updatePreview();
+    });
     // Nome digitado todo em minúsculas ou maiúsculas recebe iniciais
     // maiúsculas ao sair do campo; grafias mistas (McDonald) são respeitadas.
     const PARTICULAS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'del']);
@@ -1019,6 +1226,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const formatado = formatarNomeProprio(campo.value);
             if (formatado === campo.value) return;
             campo.value = formatado;
+            if (campo === elementos.nomeFalecido) preencherFamiliaAutomatica();
             updatePreview();
         }));
 
