@@ -56,6 +56,11 @@ assert.equal(kanjiNomes.candidatos('Silva').kanji.length, 0, 'Nome português n�
 // Base ampla (assets/kanji-dados.js): ordem por população nos sobrenomes e
 // grafias tradicionais primeiro nos nomes.
 assert.ok(html.includes('assets/kanji-dados.js'), 'Base ampla de kanji não está carregada.');
+// Fase 3: pendência quando a família ainda vai confirmar a escrita.
+assert.ok(html.includes('id="escolha-depois"') && html.includes('id="lista-pendencias"'), 'Pendência da escrita japonesa ausente.');
+assert.ok(script.includes("(pendente && botao !== botoes.imprimirAprovacao)"), 'Pendência deveria bloquear só a peça final.');
+// Scripts locais versionados: o navegador não mistura arquivo antigo e novo.
+assert.ok(/<script src="script\.js\?v=\w+"><\/script>/.test(html), 'Scripts sem versão para evitar cache antigo.');
 assert.deepEqual(kanjiNomes.candidatos('Saito', 'sobrenome').kanji.slice(0, 2), ['斎藤', '斉藤'], 'Ordem dos sobrenomes não segue a população.');
 assert.ok(!kanjiNomes.candidatos('Saito', 'sobrenome').kanji.includes('彩人'), 'Prenome apareceu como opção de sobrenome.');
 assert.equal(kanjiNomes.candidatos('Tsutomu', 'nome').kanji[0], '勉', 'Grafia tradicional de Tsutomu deveria vir primeiro.');

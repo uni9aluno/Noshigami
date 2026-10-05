@@ -228,6 +228,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const japonesCompleto = Boolean(elementos.nomeFalecidoJapones.value.trim() && elementos.nomeFamiliaJapones.value.trim());
         const japonesRevisado = japonesCompleto && elementos.confirmarJapones.checked;
         const pronto = dadosCompletos && japonesRevisado;
+        // Escrita aguardando a família: a aprovação pode sair, a peça final não.
+        const pendente = estaPendente();
 
         definirEstado(fluxo.statusDados, dadosCompletos ? 'Dados completos' : `${preenchidos} de 3 obrigatórios`, dadosCompletos ? 'complete' : 'blocked');
         definirEstado(fluxo.checkObrigatorios, dadosCompletos ? '✓ Dados obrigatórios completos' : `○ Dados obrigatórios: ${preenchidos}/3`, dadosCompletos ? 'complete' : 'blocked');
@@ -242,7 +244,9 @@ document.addEventListener('DOMContentLoaded', function () {
             definirEstado(fluxo.checkJapones, '✓ Nomes japoneses revisados', 'complete');
         }
         definirEstado(fluxo.statusFinalizacao, pronto ? 'Pronto para finalizar' : 'Ação necessária', pronto ? 'complete' : 'blocked');
-        fluxo.resumoFinalizacao.textContent = pronto
+        fluxo.resumoFinalizacao.textContent = pronto && pendente
+            ? 'A família vai confirmar a escrita em japonês: já dá para imprimir a aprovação; a peça final fica liberada depois da confirmação.'
+            : pronto
             ? 'Tudo pronto. Escolha abaixo como salvar, imprimir ou exportar o Noshigami.'
             : !dadosCompletos
                 ? `Faltam ${3 - preenchidos} campo(s) obrigatório(s) na etapa 1.`
@@ -252,8 +256,9 @@ document.addEventListener('DOMContentLoaded', function () {
         fluxo.resumoFinalizacao.classList.toggle('ready', pronto);
 
         [botoes.salvar, botoes.exportarDocx, botoes.imprimirNoshigami, botoes.imprimirAprovacao].forEach(botao => {
-            botao.disabled = !pronto;
-            botao.title = pronto ? '' : fluxo.resumoFinalizacao.textContent;
+            const bloqueado = !pronto || (pendente && botao !== botoes.imprimirAprovacao);
+            botao.disabled = bloqueado;
+            botao.title = bloqueado ? fluxo.resumoFinalizacao.textContent : '';
         });
     }
 
@@ -652,6 +657,58 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function estaPendente() {
+        return Object.values(origemJapones).includes('pendente');
+    }
+
+    /* Pendências: atendimentos em que a família ainda vai confirmar a escrita
+       em japonês. Aparecem no topo do Histórico e com contador no ícone, para
+       ninguém precisar lembrar delas. */
+    function atualizarPendencias() {
+        const pendentes = memoria.filter(item => item.pendente).reverse();
+        const badge = document.getElementById('badge-pendencias');
+        const bloco = document.getElementById('pendencias');
+        const lista = document.getElementById('lista-pendencias');
+        if (!badge || !bloco || !lista) return;
+        badge.hidden = !pendentes.length;
+        badge.textContent = String(pendentes.length);
+        bloco.hidden = !pendentes.length;
+        lista.textContent = '';
+        pendentes.forEach(item => {
+            const botao = document.createElement('button');
+            botao.type = 'button';
+            botao.className = 'pendencia-item';
+            botao.textContent = `${item.nomeFalecido} — Família ${item.nomeFamilia || '?'}`;
+            const quando = document.createElement('small');
+            quando.textContent = `Aguardando desde ${dataCurta(item.pendenteDesde || item.atualizadoEm)}`;
+            botao.append(quando);
+            botao.addEventListener('click', () => retomarPendencia(item));
+            lista.append(botao);
+        });
+    }
+
+    function retomarPendencia(item) {
+        elementos.nomeFalecido.value = item.nomeFalecido;
+        elementos.nomeFamilia.value = item.nomeFamilia || '';
+        familiaAutomatica = false;
+        Object.keys(CAMPOS_JAPONESES).forEach(campo => {
+            origemJapones[campo] = 'auto';
+            registroUsado[campo] = null;
+        });
+        preencherJapones();
+        // É o mesmo pedido: o período da missa volta junto.
+        const periodo = (item.periodos || [])[(item.periodos || []).length - 1];
+        if (periodo) {
+            elementos.periodoNumeral.value = periodo;
+            sincronizarPorPortugues();
+        }
+        elementos.confirmarJapones.checked = true;
+        historyPanel.classList.remove('open');
+        updatePreview();
+        showFeedback('Atendimento retomado: com a família, toque em “Escolher agora”.', 'info', 5000);
+        elementos.nomeFalecidoJapones.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     function gravarMemoria() {
         try {
             localStorage.setItem(CHAVE_MEMORIA, JSON.stringify(memoria));
@@ -659,6 +716,7 @@ document.addEventListener('DOMContentLoaded', function () {
             console.warn('Não foi possível gravar a memória da loja:', erro);
         }
         atualizarTotalMemoria();
+        atualizarPendencias();
     }
 
     function atualizarTotalMemoria() {
@@ -676,6 +734,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const base = maisNovo ? { ...anterior, ...novo } : { ...novo, ...anterior };
         base.aprovado = Boolean((anterior && anterior.aprovado) || novo.aprovado);
         base.aprovadoEm = (anterior && anterior.aprovadoEm) || novo.aprovadoEm || '';
+        // Pendência continuada mantém a data em que começou.
+        if (novo.pendente && anterior && anterior.pendente && anterior.pendenteDesde) base.pendenteDesde = anterior.pendenteDesde;
         base.periodos = Array.from(new Set([...(anterior && anterior.periodos) || [], ...(novo.periodos || [])]));
         memoria.push(base);
         if (memoria.length > MAX_MEMORIA) memoria.splice(0, memoria.length - MAX_MEMORIA);
@@ -693,7 +753,9 @@ document.addEventListener('DOMContentLoaded', function () {
             relacao: d.relacao,
             periodos: d.periodonumeral ? [d.periodonumeral] : [],
             aprovado: Boolean(aprovado),
+            pendente: estaPendente(),
             aprovadoEm: aprovado ? agora : '',
+            pendenteDesde: estaPendente() ? agora : '',
             atualizadoEm: agora
         });
         gravarMemoria();
@@ -769,11 +831,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         Object.entries(CAMPOS_JAPONESES).forEach(([campo, config]) => {
             if (origemJapones[campo] === 'manual') return;
-            if (origemJapones[campo] === 'cliente' && alterados && !alterados.includes(config.portugues)) return;
+            const decidido = origemJapones[campo] === 'cliente' || origemJapones[campo] === 'pendente';
+            if (decidido && alterados && !alterados.includes(config.portugues)) return;
             const registro = registros[campo];
             if (registro && registro[config.memoria]) {
                 elementos[campo].value = registro[config.memoria];
-                origemJapones[campo] = 'memoria';
+                // Registro salvo como pendente continua pendente até a família confirmar.
+                origemJapones[campo] = registro.pendente ? 'pendente' : 'memoria';
                 registroUsado[campo] = registro;
             } else {
                 elementos[campo].value = katakanaAutomatico(elementos[config.portugues].value);
@@ -835,7 +899,8 @@ document.addEventListener('DOMContentLoaded', function () {
         painel: document.getElementById('escolha-kanji'),
         linhas: document.getElementById('escolha-kanji-linhas'),
         resultado: document.getElementById('escolha-resultado'),
-        confirmar: document.getElementById('escolha-confirmar')
+        confirmar: document.getElementById('escolha-confirmar'),
+        depois: document.getElementById('escolha-depois')
     };
     const escolhas = new Map(); // palavra normalizada → kanji escolhido ('' = katakana)
     const OPCOES_VISIVEIS = 7;
@@ -913,8 +978,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function abrirEscolhaKanji(campos) {
+        // Só o que foi digitado à mão fica de fora: memória, pendência e
+        // escolha anterior podem ser trocadas pelo cliente.
         camposEscolha = campos || Object.keys(CAMPOS_JAPONESES)
-            .filter(c => origemJapones[c] === 'auto' || origemJapones[c] === 'cliente');
+            .filter(c => origemJapones[c] !== 'manual');
         const linhas = linhasEscolhaKanji(camposEscolha);
         if (!linhas.length) {
             abrirTelaCheia();
@@ -934,7 +1001,7 @@ document.addEventListener('DOMContentLoaded', function () {
             titulo.textContent = linha.palavra;
             const opcoes = document.createElement('div');
             opcoes.className = 'escolha-opcoes';
-            opcoes.append(criarOpcao(linha, '', katakanaAutomatico(linha.palavra) || linha.palavra, 'Não sei / sem kanji'));
+            opcoes.append(criarOpcao(linha, '', katakanaAutomatico(linha.palavra) || linha.palavra, 'katakana / sem kanji'));
             // As 7 grafias mais prováveis ficam à vista; as raras, em "Ver mais",
             // para não sobrecarregar o cliente (Hiroshi tem mais de 30).
             const selecionada = linha.kanji.indexOf(escolhas.get(linha.chave));
@@ -974,8 +1041,25 @@ document.addEventListener('DOMContentLoaded', function () {
         // O cliente acabou de escolher olhando a peça: a revisão está feita.
         elementos.confirmarJapones.checked = true;
         escolhaKanji.painel.hidden = true;
+        // Grava já: resolve uma pendência antiga sem depender da impressão.
+        registrarNaMemoria(false);
         updatePreview();
         showFeedback('Escolha do cliente aplicada ao Noshigami.', 'success');
+    });
+
+    // Cliente não sabe a escrita agora: fica o katakana provisório, a
+    // aprovação pode ser impressa e a peça final espera a família.
+    escolhaKanji.depois.addEventListener('click', () => {
+        camposEscolha.forEach(campo => {
+            elementos[campo].value = katakanaAutomatico(elementos[CAMPOS_JAPONESES[campo].portugues].value);
+            origemJapones[campo] = 'pendente';
+            registroUsado[campo] = null;
+        });
+        elementos.confirmarJapones.checked = true;
+        escolhaKanji.painel.hidden = true;
+        registrarNaMemoria(false);
+        updatePreview();
+        showFeedback('Pendente: a peça final fica bloqueada até a família confirmar a escrita. O atendimento está em Histórico › Aguardando a família.', 'info', 7000);
     });
 
     // Sair da tela cheia com a escolha aberta cancela sem mudar nada.
@@ -1017,6 +1101,9 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (origemJapones[campo] === 'cliente') {
                 origem.className = 'origem-cliente';
                 origem.textContent = '✓ escolhido pelo cliente';
+            } else if (origemJapones[campo] === 'pendente') {
+                origem.className = 'origem-pendente';
+                origem.textContent = '⏳ katakana provisório — a família vai confirmar a escrita';
             } else if (origemJapones[campo] === 'manual') {
                 origem.className = 'origem-manual';
                 origem.textContent = 'digitado manualmente';
@@ -1033,6 +1120,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 perguntar.textContent = 'Mostrar opções de kanji ao cliente';
                 perguntar.addEventListener('click', () => abrirEscolhaKanji());
                 status.append(perguntar);
+            } else if (origemJapones[campo] === 'pendente') {
+                const resolver = document.createElement('button');
+                resolver.type = 'button';
+                resolver.className = 'small-action perguntar-kanji';
+                resolver.textContent = 'Família confirmou? Escolher agora';
+                resolver.addEventListener('click', () => abrirEscolhaKanji());
+                status.append(resolver);
+            } else if ((origemJapones[campo] === 'memoria' || origemJapones[campo] === 'cliente') && linhasEscolhaKanji([campo]).length) {
+                const trocar = document.createElement('button');
+                trocar.type = 'button';
+                trocar.className = 'small-action voltar-automatico';
+                trocar.textContent = 'Trocar escrita';
+                trocar.addEventListener('click', () => abrirEscolhaKanji());
+                status.append(trocar);
             } else if (origemJapones[campo] === 'auto' && window.NoshigamiKatakana && window.NoshigamiKatakana.temOrigemJaponesa(portugues)) {
                 const dica = document.createElement('span');
                 dica.className = 'dica-kanji';
@@ -1071,9 +1172,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 elementos.leituraCliente.append(...(i ? [' · ', bloco] : [bloco]));
             });
         }
-        elementos.printLeitura.textContent = partes.length
+        elementos.printLeitura.textContent = (partes.length
             ? `Leitura dos nomes em japonês — ${partes.join('; ')}.`
-            : '';
+            : '') + (estaPendente()
+            ? ' Escrita em japonês PROVISÓRIA, a confirmar pela família antes da impressão final.'
+            : '');
     }
 
     function exportarMemoria() {
@@ -1341,6 +1444,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (memoria.length) gravarMemoria();
         }
         atualizarTotalMemoria();
+        atualizarPendencias();
         updatePreview();
         updateHistoryDisplay();
         if (window.ResizeObserver && stage) new ResizeObserver(atualizarEscala).observe(stage);

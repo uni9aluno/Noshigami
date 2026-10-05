@@ -7,14 +7,14 @@
     <!-- Todos os recursos ficam locais para preservar o funcionamento offline.
          JSZip é usado somente para preencher o template DOCX; a preparação do
          PDF continua sendo feita diretamente pelo navegador. -->
-    <script src="vendor/jszip.min.js"></script>
-    <script src="assets/fundo-noshigami.js"></script>
-    <script src="assets/modelo-docx.js"></script>
-    <script src="docx-export.js"></script>
-    <script src="vendor/wanakana.min.js"></script>
-    <script src="katakana-transliterator.js"></script>
-    <script src="assets/kanji-dados.js"></script>
-    <script src="kanji-nomes.js"></script>
+    <script src="vendor/jszip.min.js?v=20261005a"></script>
+    <script src="assets/fundo-noshigami.js?v=20261005a"></script>
+    <script src="assets/modelo-docx.js?v=20261005a"></script>
+    <script src="docx-export.js?v=20261005a"></script>
+    <script src="vendor/wanakana.min.js?v=20261005a"></script>
+    <script src="katakana-transliterator.js?v=20261005a"></script>
+    <script src="assets/kanji-dados.js?v=20261005a"></script>
+    <script src="kanji-nomes.js?v=20261005a"></script>
 <style>/* Fonte Yuji Syuku (fonts/YujiSyuku-Regular.ttf já existia no projeto, mas nunca era
    declarada via @font-face — sem isso o navegador sempre caía no fallback 'serif'). */
 @font-face {
@@ -714,7 +714,62 @@ body[data-theme="dark"] .japones-status .leitura { color: #f8fafc; }
     font: 400 1.25em/1.2 'Yuji Syuku', serif;
     color: #0f172a;
 }
-.escolha-acoes { display: flex; justify-content: center; }
+.escolha-acoes { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; }
+#escolha-depois {
+    padding: 14px 28px;
+    font-size: 15px;
+    text-transform: none;
+    letter-spacing: 0;
+    background: #fff;
+    color: #9a3412;
+    border: 2px solid #f97316;
+    box-shadow: none;
+}
+
+/* Pendência: escrita em japonês aguardando a família. */
+.japones-status .origem-pendente { color: #9a3412; }
+.history-toggle { position: relative; }
+.badge-pendencias {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #f97316;
+    color: #fff;
+    font: 700 12px/20px Arial, sans-serif;
+    text-align: center;
+}
+.badge-pendencias[hidden] { display: none; }
+.pendencias {
+    margin-bottom: 18px;
+    padding: 12px;
+    border: 2px solid #fdba74;
+    border-radius: 12px;
+    background: #fff7ed;
+    color: #7c2d12;
+}
+.pendencias[hidden] { display: none; }
+.pendencias h3 { margin-bottom: 4px; color: #9a3412; }
+.pendencias-ajuda { margin-bottom: 8px; font: 13px/1.4 Arial, sans-serif; }
+.pendencia-item {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fff;
+    color: #7c2d12;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0;
+    font: 600 14px/1.35 Arial, sans-serif;
+    box-shadow: none;
+    border: 1px solid #fed7aa;
+}
+.pendencia-item small { display: block; font-weight: 400; color: #9a3412; }
 #escolha-confirmar {
     padding: 16px 48px;
     font-size: 18px;
@@ -1652,7 +1707,8 @@ body[data-theme="dark"] .history-item small.timestamp {
                     <dt>Parentesco/título</dt><dd>Define o título vertical antes do nome. <strong>Sem parentesco - 亡</strong> exibe somente 亡; <strong>Não exibir título</strong> remove o bloco.</dd>
                 </dl>
                 <p class="help-note"><strong>Preenchimento automático:</strong> ao digitar o nome em português, o app preenche o nome em japonês sozinho. Se o falecido ou a família já foram atendidos neste computador, ele usa os nomes aprovados da última vez (memória da loja); senão, gera o katakana. Embaixo de cada campo aparece a leitura (“lê-se”) para conferir com o cliente. Se alguém digitar no campo japonês, o app respeita o texto e oferece <strong>Voltar ao automático</strong>. O <strong>Nome da família</strong> também é preenchido sozinho com o sobrenome do falecido; se a família for outra, basta digitar por cima.</p>
-                <p class="help-note"><strong>Kanji escolhido pelo cliente:</strong> quando o nome tem escrita conhecida em kanji (Watanabe → 渡辺, 渡部…), o botão <strong>Tela cheia</strong> abre primeiro uma tela para o cliente tocar na escrita da família. O vendedor não precisa saber japonês: é o cliente quem reconhece. Se ele não souber, fica o katakana (“Não sei”). Com kanji, o nome segue a ordem japonesa: sobrenome primeiro (渡辺茂).</p>
+                <p class="help-note"><strong>Kanji escolhido pelo cliente:</strong> quando o nome tem escrita conhecida em kanji (Watanabe → 渡辺, 渡部…), o botão <strong>Tela cheia</strong> abre primeiro uma tela para o cliente tocar na escrita da família. O vendedor não precisa saber japonês: é o cliente quem reconhece. Se ele não souber, fica o katakana (“Não sei”). Com kanji, o nome segue a ordem japonesa: sobrenome primeiro (渡辺茂). Para mudar depois, use <strong>Trocar escrita</strong> embaixo do campo.</p>
+                <p class="help-note"><strong>Família vai confirmar depois:</strong> se o cliente não souber a escrita na hora, toque em <strong>A família vai confirmar depois</strong>. Fica o katakana provisório, a folha de aprovação pode ser impressa (com o aviso “provisória”) e a peça final fica bloqueada. O atendimento aparece no Histórico em <strong>Aguardando a família</strong>, com um contador laranja no ícone; quando a família responder, toque nele e em <strong>Família confirmou? Escolher agora</strong>.</p>
                 <p class="help-note"><strong>Memória da loja:</strong> é gravada sozinha sempre que a peça é impressa, salva em PDF ou exportada; a impressão de aprovação marca o registro como aprovado pelo cliente. Fica neste navegador — use <strong>Exportar/Importar memória</strong> no Histórico para ter cópia ou levar para outro computador.</p>
                 <p class="help-note"><strong>Katakana ou kanji?</strong> Katakana é a escrita usada para nomes estrangeiros, como os brasileiros (Armando → アルマンド). Nomes e sobrenomes <strong>de origem japonesa</strong> (Yamada, Watanabe, Iwamoto) costumam ser escritos em <strong>kanji</strong> pela família: 山田家, 渡辺家, 岩本家. Nesses casos, pergunte ao cliente como a família escreve o nome; se for em kanji, peça a grafia (um documento, um Noshigami anterior) e digite com o teclado japonês do Windows (IME). A sugestão em katakana serve apenas quando a família não usa kanji. Hiragana não é usado para nomes no Noshigami.</p>
             </section>
@@ -1705,6 +1761,11 @@ body[data-theme="dark"] .history-item small.timestamp {
     </div>
 
     <div class="history-panel" id="historyPanel">
+        <div class="pendencias" id="pendencias" hidden>
+            <h3>Aguardando a família</h3>
+            <p class="pendencias-ajuda">Escrita em japonês ainda não confirmada. Toque para retomar.</p>
+            <div id="lista-pendencias"></div>
+        </div>
         <h3>Histórico de Entradas</h3>
         <!-- Conteúdo gerado dinamicamente por updateHistoryDisplay() em script.js.
              (Antes havia 4 itens de teste fixos no HTML — dados de debug que nunca deveriam
@@ -1738,6 +1799,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                 </button>
                 <button class="history-toggle" onclick="toggleHistory()" title="Histórico" aria-label="Histórico">
                     <svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.2 12a8.8 8.8 0 1 0 2.6-6.2"/><path d="M3 4.2V9h4.8"/><path d="M12 7.6V12l3.2 1.9"/></svg>
+                    <span class="badge-pendencias" id="badge-pendencias" hidden></span>
                 </button>
             </div>
         </div>
@@ -1891,11 +1953,12 @@ body[data-theme="dark"] .history-item small.timestamp {
                      O vendedor não precisa saber japonês; o cliente aponta a escrita da família. -->
                 <div id="escolha-kanji" hidden role="dialog" aria-modal="true" aria-labelledby="escolha-kanji-titulo">
                     <h2 id="escolha-kanji-titulo">Como a sua família escreve o nome em japonês?</h2>
-                    <p class="escolha-sub">Toque na escrita igual à da família. Se não souber, deixe em <strong>Não sei</strong>.</p>
+                    <p class="escolha-sub">Toque na escrita igual à da família. Se a família não usa kanji, fique com o <strong>katakana</strong>.</p>
                     <div id="escolha-kanji-linhas"></div>
                     <p class="escolha-resultado">Assim ficará no Noshigami: <span id="escolha-resultado"></span></p>
                     <div class="escolha-acoes">
                         <button type="button" id="escolha-confirmar">Confirmar</button>
+                        <button type="button" id="escolha-depois">A família vai confirmar depois</button>
                     </div>
                 </div>
                 <div id="noshigami-stage">
@@ -1979,7 +2042,7 @@ body[data-theme="dark"] .history-item small.timestamp {
         </section>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=20261005a"></script>
 
 
 
