@@ -99,6 +99,21 @@ em `katakana-transliterator.js` e botões de sugestão nos dois campos de nomes.
 O resultado só é aplicado após confirmação e pode ser editado livremente. As
 Partes B e C continuam necessárias antes da aprovação humana para produção.
 
+### Nomes de origem japonesa
+
+Cada palavra do nome é classificada antes da conversão. Palavras que formam
+romanização Hepburn válida (Watanabe, Chiba, Shigeru, Iwamoto) são convertidas
+direto pelo WanaKana, sem a camada fonética PT-BR — antes, `w` virava `u`,
+`ch` virava `sh` e `ge` virava `je` (ウアタナベ, シバ, シジェル). Palavras com
+acento português, letras fora do Hepburn (l, v, c, x) ou listadas em
+`NOMES_PORTUGUESES` (Regina, Rocha, Machado) seguem a camada PT-BR.
+Sobrenomes frequentes grafados sem vogal longa (Sato, Ito, Oshiro) usam o
+dicionário `LEITURAS_JAPONESAS` (サトウ, イトウ, オオシロ).
+
+Quando o nome tem origem japonesa, a confirmação da sugestão orienta o
+vendedor a perguntar se a família usa kanji (山田家): nesse caso o kanji deve
+ser digitado com o IME e a sugestão em katakana não deve ser aplicada.
+
 ## Referências consultadas em 4 de outubro de 2026
 
 - WanaKana: <https://github.com/WaniKani/WanaKana>

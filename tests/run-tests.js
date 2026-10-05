@@ -45,6 +45,22 @@ assert.ok(!html.includes('unpkg.com'), 'WanaKana não pode depender de CDN.');
 assert.equal(katakana.sugerir('Maria'), 'マリア', 'Transliteração de Maria incorreta.');
 assert.equal(katakana.sugerir('Armando'), 'アルマンド', 'Transliteração de Armando incorreta.');
 assert.equal(katakana.sugerir('João'), 'ジョアン', 'Transliteração de João incorreta.');
+// Nomes de origem japonesa não podem passar pelas regras do português
+// (w → u, ch → sh, ge → je); sobrenomes frequentes recebem a vogal longa.
+const leiturasEsperadas = {
+    Watanabe: 'ワタナベ', Iwamoto: 'イワモト', Ogawa: 'オガワ', Kawasaki: 'カワサキ',
+    Chiba: 'チバ', Uchida: 'ウチダ', Michiko: 'ミチコ', Tsuchiya: 'ツチヤ',
+    Shigeru: 'シゲル', Gen: 'ゲン', Hattori: 'ハットリ', Homma: 'ホンマ',
+    Ohno: 'オオノ', 'Satō': 'サトウ', Sato: 'サトウ', Ito: 'イトウ', Oshiro: 'オオシロ',
+    Yamada: 'ヤマダ', Takahashi: 'タカハシ',
+    Regina: 'レジナ', 'Rogério': 'ロジェリオ', Rocha: 'ロシャ', Machado: 'マシャド',
+    'Gerônimo Tacachi Iwamoto': 'ジェロニモ タカシ イワモト', 'Maria Yamada': 'マリア ヤマダ'
+};
+Object.entries(leiturasEsperadas).forEach(([nome, esperado]) => {
+    assert.equal(katakana.sugerir(nome), esperado, `Transliteração de ${nome} incorreta.`);
+});
+assert.equal(katakana.temOrigemJaponesa('Maria Yamada'), true, 'Sobrenome japonês não detectado.');
+assert.equal(katakana.temOrigemJaponesa('Armando Silva'), false, 'Nome português classificado como japonês.');
 assert.ok(html.includes('id="tirar-print"'), 'Botão para salvar o Noshigami ausente.');
 assert.ok(!html.includes('id="capturar-imagem"'), 'Botão de captura de imagem ainda está presente.');
 assert.ok(script.includes("imprimir('noshigami', 'pdf')"), 'Botão Salvar Noshigami não aciona o fluxo de PDF.');

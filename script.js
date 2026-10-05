@@ -597,9 +597,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!window.NoshigamiKatakana) throw new Error('Módulo de katakana indisponível.');
             const sugestao = window.NoshigamiKatakana.sugerir(origem.value);
             const valorAtual = destino.value.trim();
+            // Nomes de origem japonesa costumam ser escritos em kanji pela
+            // família; o katakana só serve se ela não usar kanji.
+            const alertaKanji = window.NoshigamiKatakana.temOrigemJaponesa(origem.value)
+                ? '\n\nATENÇÃO: este nome parece ser de origem japonesa. Pergunte ao cliente se a família usa kanji (ex.: 山田家). Se usar, cancele e digite o kanji com o teclado japonês (IME).'
+                : '';
             const aviso = valorAtual
-                ? `Sugestão: ${sugestao}\n\nSubstituir o valor atual “${valorAtual}”? Revise a leitura antes de salvar.`
-                : `Sugestão: ${sugestao}\n\nAplicar ao campo japonês? Revise a leitura antes de salvar.`;
+                ? `Sugestão: ${sugestao}${alertaKanji}\n\nSubstituir o valor atual “${valorAtual}”? Revise a leitura antes de salvar.`
+                : `Sugestão: ${sugestao}${alertaKanji}\n\nAplicar ao campo japonês? Revise a leitura antes de salvar.`;
             if (!window.confirm(aviso)) return;
             destino.value = sugestao;
             elementos.confirmarJapones.checked = false;
