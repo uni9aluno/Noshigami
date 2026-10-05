@@ -118,6 +118,15 @@ function iniciarServidor() {
         });
 
         await page.locator('#mensagemPortugues').fill('Mensagem personalizada para aprovação.');
+        const eixoMensagem = await page.evaluate(() => {
+            const canvas = document.querySelector('#noshigami-canvas').getBoundingClientRect();
+            const mensagem = document.querySelector('#texto-fixo').getBoundingClientRect();
+            return {
+                canvas: canvas.left + canvas.width / 2,
+                mensagem: mensagem.left + mensagem.width / 2
+            };
+        });
+        assert.ok(Math.abs(eixoMensagem.mensagem - eixoMensagem.canvas) < 1, 'Mensagem não está centralizada no Noshigami.');
         await page.locator('#mostrarMensagem').uncheck();
         assert.equal(await page.locator('#texto-fixo').evaluate(el => getComputedStyle(el).display), 'none');
         await page.locator('#mostrarMensagem').check();
@@ -158,10 +167,17 @@ function iniciarServidor() {
         await page.setViewportSize({ width: 1600, height: 1130 });
         const medidas = await page.evaluate(() => ({
             folha: parseFloat(getComputedStyle(document.querySelector('#print-area')).width),
-            noshigami: parseFloat(getComputedStyle(document.querySelector('#print-noshigami-image')).width)
+            noshigami: parseFloat(getComputedStyle(document.querySelector('#print-noshigami-image')).width),
+            eixoFolha: document.querySelector('#print-area').getBoundingClientRect().left + document.querySelector('#print-area').getBoundingClientRect().width / 2,
+            eixoNoshigami: document.querySelector('#print-noshigami-image').getBoundingClientRect().left + document.querySelector('#print-noshigami-image').getBoundingClientRect().width / 2,
+            eixoTermo: document.querySelector('.print-termo').getBoundingClientRect().left + document.querySelector('.print-termo').getBoundingClientRect().width / 2,
+            eixoAssinatura: document.querySelector('.linha-assinatura').getBoundingClientRect().left + document.querySelector('.linha-assinatura').getBoundingClientRect().width / 2
         }));
         assert.ok(Math.abs(medidas.folha - 1587.4) < 2, 'Largura A3 incorreta.');
         assert.ok(Math.abs(medidas.noshigami - 1379.5) < 2, 'Noshigami não está com 36,5 cm na impressão.');
+        assert.ok(Math.abs(medidas.eixoNoshigami - medidas.eixoFolha) < 1, `Noshigami não está centralizado na folha A3: ${JSON.stringify(medidas)}`);
+        assert.ok(Math.abs(medidas.eixoTermo - medidas.eixoFolha) < 1, `Termo não está centralizado na folha A3: ${JSON.stringify(medidas)}`);
+        assert.ok(Math.abs(medidas.eixoAssinatura - medidas.eixoFolha) < 1, `Assinatura não está centralizada na folha A3: ${JSON.stringify(medidas)}`);
         const printScreenshot = path.join(os.tmpdir(), 'noshigami-print-a3.png');
         await page.screenshot({ path: printScreenshot, fullPage: true });
         const printPdf = path.join(os.tmpdir(), 'noshigami-print-a3.pdf');

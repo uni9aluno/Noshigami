@@ -697,13 +697,23 @@ body[data-theme="dark"] .termo-panel {
     }
 
     body.print-aprovacao #print-area {
+        display: flex !important;
         width: 42cm;
         height: 29.7cm;
         padding-top: 0.6cm;
+        flex-direction: column;
+        align-items: center;
+        overflow: hidden;
     }
 
     body.print-aprovacao #print-noshigami-image {
-        margin: 0 auto;
+        flex: 0 0 auto;
+        margin: 0;
+    }
+
+    body.print-aprovacao .print-termo {
+        flex: 0 0 auto;
+        margin: 0.55cm 0 0;
     }
 }
 
