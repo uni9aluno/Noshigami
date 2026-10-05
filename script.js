@@ -838,6 +838,7 @@ document.addEventListener('DOMContentLoaded', function () {
         confirmar: document.getElementById('escolha-confirmar')
     };
     const escolhas = new Map(); // palavra normalizada → kanji escolhido ('' = katakana)
+    const OPCOES_VISIVEIS = 7;
     let camposEscolha = [];
 
     function palavrasDe(texto) {
@@ -934,7 +935,27 @@ document.addEventListener('DOMContentLoaded', function () {
             const opcoes = document.createElement('div');
             opcoes.className = 'escolha-opcoes';
             opcoes.append(criarOpcao(linha, '', katakanaAutomatico(linha.palavra) || linha.palavra, 'Não sei / sem kanji'));
-            linha.kanji.forEach(kanji => opcoes.append(criarOpcao(linha, kanji, kanji, 'kanji')));
+            // As 7 grafias mais prováveis ficam à vista; as raras, em "Ver mais",
+            // para não sobrecarregar o cliente (Hiroshi tem mais de 30).
+            const selecionada = linha.kanji.indexOf(escolhas.get(linha.chave));
+            const visiveis = Math.max(OPCOES_VISIVEIS, selecionada + 1);
+            linha.kanji.forEach((kanji, i) => {
+                const opcao = criarOpcao(linha, kanji, kanji, 'kanji');
+                opcao.hidden = i >= visiveis;
+                opcoes.append(opcao);
+            });
+            const escondidas = linha.kanji.length - visiveis;
+            if (escondidas > 0) {
+                const verMais = document.createElement('button');
+                verMais.type = 'button';
+                verMais.className = 'ver-mais';
+                verMais.textContent = `Ver mais (${escondidas})`;
+                verMais.addEventListener('click', () => {
+                    opcoes.querySelectorAll('.escolha-opcao[hidden]').forEach(opcao => { opcao.hidden = false; });
+                    verMais.remove();
+                });
+                opcoes.append(verMais);
+            }
             bloco.append(titulo, opcoes);
             escolhaKanji.linhas.append(bloco);
         });

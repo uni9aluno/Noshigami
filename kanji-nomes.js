@@ -68,7 +68,14 @@
         gushiken: ['具志堅'], yamashiro: ['山城'], nakasone: ['仲宗根', '中曽根'],
         iha: ['伊波'], takara: ['高良'], nagamine: ['長嶺'], kina: ['喜納'],
         asato: ['安里'], kakazu: ['嘉数'], kuniyoshi: ['国吉'], shinzato: ['新里'],
-        maeshiro: ['前城'], inamine: ['稲嶺'], nakazato: ['仲里', '中里']
+        maeshiro: ['前城'], inamine: ['稲嶺'], nakazato: ['仲里', '中里'],
+        nakandakare: ['仲村渠'], ganeku: ['我如古'], ishimine: ['伊志嶺'], miyahira: ['宮平'],
+        agena: ['安慶名'], tokeshi: ['渡慶次'], nakachi: ['仲地'], yonaha: ['与那覇'],
+        tengan: ['天願'], oyakawa: ['親川'], kuba: ['久場'], kise: ['喜瀬'], tsuha: ['津波'],
+        zukeran: ['瑞慶覧'], chibana: ['知花'], onaga: ['翁長'], ikemiyagi: ['池宮城'],
+        hokama: ['外間'], sakima: ['佐喜眞', '佐喜真'], shinjo: ['新城'], arashiro: ['新城'],
+        gushi: ['具志'], kakinohana: ['垣花'], tamanaha: ['玉那覇'], nishime: ['西銘'],
+        kyan: ['喜屋武'], aniya: ['安仁屋'], adaniya: ['安谷屋'], uema: ['上間']
     };
 
     const NOMES = {
@@ -109,8 +116,48 @@
         junko: ['順子', '純子', '淳子'], kumiko: ['久美子', '公子'],
         mariko: ['真理子', '万里子', '麻里子'], naoko: ['直子', '尚子'],
         harue: ['春江', '晴枝'], yaeko: ['八重子'], hatsue: ['初江', '初枝'],
-        chiyo: ['千代'], kiku: ['菊']
+        chiyo: ['千代'], kiku: ['菊'],
+        // Mais nomes típicos de isseis e nisseis (era Showa).
+        tsutomu: ['勉', '努', '務', '力'], sadao: ['貞夫', '貞雄', '定雄', '定夫'],
+        mamoru: ['守', '衛', '護'], takeo: ['武雄', '武夫', '竹雄', '健夫'],
+        masayoshi: ['正義', '正善', '雅義'], yoshikazu: ['義一', '良和', '芳和'],
+        hisashi: ['久', '尚', '寿'], tadao: ['忠雄', '忠夫', '忠男'],
+        toshiyuki: ['敏之', '俊之', '利行'], katsuo: ['勝雄', '勝夫', '克夫'],
+        kunio: ['邦夫', '国雄', '邦雄', '国夫'], teruo: ['照雄', '輝夫', '照夫'],
+        yukio: ['幸雄', '幸夫', '行雄', '由紀夫'], mikio: ['幹夫', '幹雄'],
+        shizuo: ['静雄', '静夫'], tamotsu: ['保'], isao: ['功', '勲', '勇夫'],
+        satoru: ['悟', '覚', '聡'], kaoru: ['薫', '馨'], mitsuru: ['満', '充'],
+        shoichi: ['正一', '昭一', '庄一'], eiji: ['英二', '栄治', '英治'],
+        yuji: ['裕二', '雄二', '祐二', '勇二'], kenzo: ['健三', '謙三'],
+        goro: ['五郎', '吾郎'], shiro: ['四郎', '史郎', '志郎'], rokuro: ['六郎'],
+        hachiro: ['八郎'], yoshimi: ['義美', '良美', '芳美'],
+        kimie: ['君江', '喜美江', '公恵', '君枝'], kiyomi: ['清美', '喜代美'],
+        sumie: ['澄江', '寿美江', '澄枝'], yoshie: ['良江', '芳江', '佳恵', '喜枝'],
+        hisako: ['久子', '寿子', '尚子'], masae: ['正江', '雅江', '昌枝', '政江'],
+        mieko: ['美恵子', '三枝子'], tsuruko: ['鶴子'], tokiko: ['登紀子', '時子'],
+        misako: ['美佐子', '美砂子'], takako: ['孝子', '隆子', '貴子', '高子'],
+        nobuko: ['信子', '伸子', '延子'], ayako: ['綾子', '彩子', '文子'],
+        katsuko: ['勝子', '克子'], tsuneko: ['恒子', '常子'], mineko: ['峰子', '美根子'],
+        kayoko: ['佳代子', '加代子', '嘉代子'], sueko: ['末子', '季子'],
+        shigeko: ['茂子', '繁子', '重子'], kazue: ['和江', '一枝', '和枝'],
+        tomie: ['富江', '登美江', '富枝'], hideko: ['秀子', '英子'], eiko: ['栄子', '英子'],
+        tomiko: ['富子', '登美子', '冨美子'], yasuko: ['康子', '安子', '泰子', '保子'],
+        yuriko: ['百合子', '由利子', '由里子'], harumi: ['春美', '晴美', '治美'],
+        hiromi: ['弘美', '裕美', '博美'], kazumi: ['和美', '一美'],
+        akiko: ['明子', '昭子', '秋子', '章子', '晶子']
     };
+
+    // Base ampla gerada por tools/gerar-kanji-dados.js (assets/kanji-dados.js):
+    // ~1.700 leituras de sobrenomes ordenadas por população e ~8.000 de nomes.
+    let DADOS = (typeof globalThis !== 'undefined' && globalThis.NOSHIGAMI_KANJI_DADOS) || null;
+    if (!DADOS && typeof module === 'object' && module.exports) {
+        try {
+            require('./assets/kanji-dados.js');
+            DADOS = globalThis.NOSHIGAMI_KANJI_DADOS || null;
+        } catch (erro) {
+            DADOS = null; // ainda não gerado: vale só a lista curada
+        }
+    }
 
     // Chave de busca: romanização Kunrei (si, ti, tu, hu) vira Hepburn e as
     // vogais longas são encurtadas, porque no Brasil "Sato", "Satou" e
@@ -143,8 +190,21 @@
 
     const INDICE_SOBRENOMES = new Map();
     const INDICE_NOMES = new Map();
+    // Sobrenomes: a ordem por população da base vem primeiro; a lista curada
+    // só acrescenta o que faltar (Kanashiro, grafias okinawanas).
+    // Nomes: as grafias curadas (tradicionais) vêm primeiro; a base, que é
+    // mais moderna e tem grafias raras, completa depois.
+    if (DADOS && DADOS.sobrenomes) indexar(DADOS.sobrenomes, 'sobrenome', INDICE_SOBRENOMES);
     indexar(SOBRENOMES, 'sobrenome', INDICE_SOBRENOMES);
     indexar(NOMES, 'nome', INDICE_NOMES);
+    if (DADOS && DADOS.nomes) indexar(DADOS.nomes, 'nome', INDICE_NOMES);
+
+    // Só a lista curada: usada para grafias de cartório (Tacachi, Sigueru),
+    // em que a base ampla traria falsos japoneses (Erica → えりか).
+    const CURADO_SOBRENOMES = new Map();
+    const CURADO_NOMES = new Map();
+    indexar(SOBRENOMES, 'sobrenome', CURADO_SOBRENOMES);
+    indexar(NOMES, 'nome', CURADO_NOMES);
 
     // Chaves possíveis de uma palavra digitada: como está e, para grafias de
     // cartório brasileiro (Tacachi, Sigueru), pela leitura do conversor.
@@ -164,22 +224,33 @@
        lista vem primeiro quando a leitura existe nas duas (Shoji é nome e
        sobrenome): 'sobrenome' para a família, 'nome' para o prenome. */
     function candidatos(palavra, preferencia) {
-        const resultado = [];
-        let tipo = '';
+        // Usa só a lista do tipo pedido; a outra entra apenas se a primeira não
+        // tiver nada (sem isso, Saito trazia 彩人 — um prenome — como sobrenome).
+        // Maria, Ana, Souza...: nome português conhecido nunca recebe kanji.
+        if (katakana && typeof katakana.nomePortugues === 'function' && katakana.nomePortugues(palavra)) {
+            return { tipo: '', kanji: [] };
+        }
+        // Romaji válido (Hiroshi) busca em tudo; grafia aportuguesada
+        // (Tacachi) só na lista curada de nomes tradicionais.
+        const romaji = !katakana || typeof katakana.origem !== 'function' || katakana.origem(palavra) === 'japones';
         const ordem = preferencia === 'nome'
-            ? [INDICE_NOMES, INDICE_SOBRENOMES]
-            : [INDICE_SOBRENOMES, INDICE_NOMES];
-        chavesDe(palavra).forEach(k => {
-            ordem.forEach(indice => {
+            ? (romaji ? [INDICE_NOMES, INDICE_SOBRENOMES] : [CURADO_NOMES, CURADO_SOBRENOMES])
+            : (romaji ? [INDICE_SOBRENOMES, INDICE_NOMES] : [CURADO_SOBRENOMES, CURADO_NOMES]);
+        const chaves = chavesDe(palavra);
+        for (const indice of ordem) {
+            const resultado = [];
+            let tipo = '';
+            chaves.forEach(k => {
                 const item = indice.get(k);
                 if (!item) return;
-                if (!tipo) tipo = item.tipo;
+                tipo = tipo || item.tipo;
                 item.kanji.forEach(kanji => {
                     if (!resultado.includes(kanji)) resultado.push(kanji);
                 });
             });
-        });
-        return { tipo, kanji: resultado };
+            if (resultado.length) return { tipo, kanji: resultado };
+        }
+        return { tipo: '', kanji: [] };
     }
 
     return Object.freeze({ candidatos, chave });

@@ -217,5 +217,10 @@
             .some(parte => origem(parte) === 'japones');
     }
 
-    return Object.freeze({ preparar, sugerir, origem, temOrigemJaponesa });
+    // Nome português conhecido (acento, lista ou exceção): nunca tem kanji.
+    function nomePortugues(palavra) {
+        return ehNomePortugues(String(palavra || ''));
+    }
+
+    return Object.freeze({ preparar, sugerir, origem, temOrigemJaponesa, nomePortugues });
 }));

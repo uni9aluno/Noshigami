@@ -53,6 +53,17 @@ kanjiEsperado.forEach(([palavra, preferencia, kanji]) => {
     assert.ok(kanjiNomes.candidatos(palavra, preferencia).kanji.includes(kanji), `Kanji ${kanji} ausente para ${palavra}.`);
 });
 assert.equal(kanjiNomes.candidatos('Silva').kanji.length, 0, 'Nome português não deve ter opções de kanji.');
+// Base ampla (assets/kanji-dados.js): ordem por população nos sobrenomes e
+// grafias tradicionais primeiro nos nomes.
+assert.ok(html.includes('assets/kanji-dados.js'), 'Base ampla de kanji não está carregada.');
+assert.deepEqual(kanjiNomes.candidatos('Saito', 'sobrenome').kanji.slice(0, 2), ['斎藤', '斉藤'], 'Ordem dos sobrenomes não segue a população.');
+assert.ok(!kanjiNomes.candidatos('Saito', 'sobrenome').kanji.includes('彩人'), 'Prenome apareceu como opção de sobrenome.');
+assert.equal(kanjiNomes.candidatos('Tsutomu', 'nome').kanji[0], '勉', 'Grafia tradicional de Tsutomu deveria vir primeiro.');
+assert.ok(kanjiNomes.candidatos('Nakandakare', 'sobrenome').kanji.includes('仲村渠'), 'Sobrenome okinawano ausente.');
+assert.ok(kanjiNomes.candidatos('Masaharu', 'nome').kanji.length > 5, 'Base ampla de nomes não foi usada.');
+['Maria', 'Ana', 'Erica', 'Souza'].forEach(nome => {
+    assert.equal(kanjiNomes.candidatos(nome, 'nome').kanji.length, 0, `${nome} não deve abrir opções de kanji.`);
+});
 assert.ok(script.includes("registrarNaMemoria(modo === 'aprovacao')"), 'Impressão não grava a memória da loja.');
 assert.ok(html.includes('vendor/wanakana.min.js'), 'WanaKana local não está carregado.');
 assert.ok(!html.includes('unpkg.com'), 'WanaKana não pode depender de CDN.');
