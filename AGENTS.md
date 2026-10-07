@@ -7,6 +7,7 @@
 - `Noshigami.pdf` e a referencia visual; `Noshigami Okaeshi - Edicao.docx` e o template Word oficial.
 - `assets/modelo-docx.js` e gerado por `tools/generate-docx-template.ps1`; nao edite o Base64 manualmente.
 - `assets/kanji-dados.js` e gerado por `tools/gerar-kanji-dados.js`; nao edite manualmente.
+- `assets/fontes-docx.js` (fontes incorporadas no Word) e gerado por `tools/gerar-fontes-docx.js`; regenere apos mudar `fonts/` ou `assets/kanji-dados.js`.
 - Ao alterar qualquer `.js` carregado pelo `index.html`, troque o `?v=` de todos os `<script>` (ex.: `?v=20261005b`), senao o GitHub Pages pode servir arquivo antigo misturado com novo.
 
 ## Fluxo de trabalho

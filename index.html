@@ -7,19 +7,29 @@
     <!-- Todos os recursos ficam locais para preservar o funcionamento offline.
          JSZip é usado somente para preencher o template DOCX; a preparação do
          PDF continua sendo feita diretamente pelo navegador. -->
-    <script src="vendor/jszip.min.js?v=20261005a"></script>
-    <script src="assets/fundo-noshigami.js?v=20261005a"></script>
-    <script src="assets/modelo-docx.js?v=20261005a"></script>
-    <script src="docx-export.js?v=20261005a"></script>
-    <script src="vendor/wanakana.min.js?v=20261005a"></script>
-    <script src="katakana-transliterator.js?v=20261005a"></script>
-    <script src="assets/kanji-dados.js?v=20261005a"></script>
-    <script src="kanji-nomes.js?v=20261005a"></script>
+    <script src="vendor/jszip.min.js?v=20261006b"></script>
+    <script src="assets/fundo-noshigami.js?v=20261006b"></script>
+    <script src="assets/modelo-docx.js?v=20261006b"></script>
+    <script src="docx-export.js?v=20261006b"></script>
+    <script src="vendor/wanakana.min.js?v=20261006b"></script>
+    <script src="katakana-transliterator.js?v=20261006b"></script>
+    <script src="assets/kanji-dados.js?v=20261006b"></script>
+    <script src="kanji-nomes.js?v=20261006b"></script>
 <style>/* Fonte Yuji Syuku (fonts/YujiSyuku-Regular.ttf já existia no projeto, mas nunca era
    declarada via @font-face — sem isso o navegador sempre caía no fallback 'serif'). */
 @font-face {
     font-family: 'Yuji Syuku';
     src: url('fonts/YujiSyuku-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Great Vibes: fonte da mensagem em português (tela, PDF e Word). */
+@font-face {
+    font-family: 'Great Vibes';
+    src: url('fonts/GreatVibes-Regular.woff2') format('woff2'),
+        url('fonts/GreatVibes-Regular.ttf') format('truetype');
     font-weight: normal;
     font-style: normal;
     font-display: swap;
@@ -870,19 +880,33 @@ body[data-theme="dark"] .termo-panel {
     margin-top: 0.3cm;
 }
 
-.linha-preenchimento,
-.linha-assinatura {
+.linha-preenchimento {
     display: inline-block;
     min-width: 8cm;
     border-bottom: 1px solid #111;
     padding: 0 0.15cm 0.08cm;
 }
 
+/* Quadrado em branco: o cliente marca à mão. */
+.quadro-aceite {
+    display: inline-block;
+    width: 0.42cm;
+    height: 0.42cm;
+    margin-right: 0.15cm;
+    border: 1.2px solid #111;
+    vertical-align: -0.08cm;
+}
+
+/* Espaço livre acima da linha para a assinatura à mão; a legenda fica
+   embaixo da linha. */
 .linha-assinatura {
     display: block;
-    width: 13cm;
-    margin: 0.65cm auto 0;
+    width: 15cm;
+    margin: 1.5cm auto 0;
+    padding-top: 0.12cm;
+    border-top: 1px solid #111;
     text-align: center;
+    font-size: 9pt;
 }
 
 @media print {
@@ -1211,8 +1235,8 @@ body[data-theme="dark"] #preview {
     cursor: move;
     padding: 10px;
     white-space: pre-line;
-    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
-    font-size: 25px;
+    font-family: 'Great Vibes', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+    font-size: 34px;
     width: 800px;
     text-align: center;
     line-height: 1.35;
@@ -1258,6 +1282,116 @@ body[data-theme="dark"] .text-container { color: #1c212b; }
     outline: 1px dashed #667eea;
     outline-offset: 2px;
 }
+#noshigami-canvas .draggable.selecionado {
+    outline: 2px solid rgba(255, 61, 154, 0.7);
+    outline-offset: 2px;
+}
+
+/* Linhas guia: aparecem só enquanto um texto é arrastado. A espessura é
+   definida pelo script para continuar fina com qualquer escala da prévia. */
+#guias {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 20;
+}
+.guia {
+    position: absolute;
+    border: 0 dashed #ff3d9a;
+}
+.guia-v { top: 0; bottom: 0; }
+.guia-h { left: 0; right: 0; }
+
+/* Ajuste da posição em mm */
+.painel-posicao {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: #fdf2f8;
+    color: #831843;
+    font: 600 14px/1.3 Arial, sans-serif;
+}
+body[data-theme="dark"] .painel-posicao { background: rgba(255, 61, 154, 0.12); color: #fbcfe8; }
+.painel-posicao label { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.painel-posicao input[type="number"] {
+    width: 92px;
+    padding: 6px 8px;
+    font: 600 15px/1.2 Arial, sans-serif;
+    text-align: right;
+}
+.painel-posicao .posicao-campo { min-width: 170px; }
+.painel-posicao .posicao-dica { flex-basis: 100%; font-weight: 400; font-size: 12px; opacity: 0.85; }
+
+/* Botão de remover em itens do histórico e das pendências */
+.item-removivel { position: relative; }
+.item-removivel > .history-item,
+.item-removivel > .pendencia-item { padding-right: 44px; }
+.item-removivel > .remover-item {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    margin: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #fff;
+    color: #b91c1c;
+    font: 700 18px/1 Arial, sans-serif;
+    box-shadow: none;
+    text-transform: none;
+    letter-spacing: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.item-removivel > .remover-item:hover { background: #fee2e2; transform: none; }
+
+/* Busca de noshigamis no cabeçalho */
+.header-busca {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(300px, 32%);
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(102, 126, 234, 0.35);
+    color: var(--text-light);
+}
+body[data-theme="dark"] .header-busca { background: rgba(0, 0, 0, 0.25); color: var(--text-dark); }
+.header-busca .icone { flex: 0 0 auto; width: 18px; height: 18px; }
+.header-busca input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: 15px Arial, sans-serif;
+}
+.header-busca input:focus { outline: none; box-shadow: none; }
+.header-busca:focus-within { border-color: #ff3d9a; box-shadow: 0 0 0 3px rgba(255, 61, 154, 0.18); }
+.busca-resumo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+    font: 600 14px/1.3 Arial, sans-serif;
+}
+.busca-resumo[hidden] { display: none; }
 
 /* Loading Spinner */
 .loading-spinner {
@@ -1590,6 +1724,12 @@ body[data-theme="dark"] .history-item small.timestamp {
     .input-wrapper {
         min-width: 100%; /* Ocupa toda a largura na coluna */
     }
+    .header-busca {
+        position: static;
+        width: 100%;
+        max-width: 420px;
+        margin: 0 auto 16px;
+    }
     .header-controls {
         position: static; /* Volta ao fluxo normal */
         justify-content: center;
@@ -1706,10 +1846,10 @@ body[data-theme="dark"] .history-item small.timestamp {
                     <dt>Missa</dt><dd>Período memorial em japonês. Também pode ser escolhido aqui; o período em português será sincronizado.</dd>
                     <dt>Parentesco/título</dt><dd>Define o título vertical antes do nome. <strong>Sem parentesco - 亡</strong> exibe somente 亡; <strong>Não exibir título</strong> remove o bloco.</dd>
                 </dl>
-                <p class="help-note"><strong>Preenchimento automático:</strong> ao digitar o nome em português, o app preenche o nome em japonês sozinho. Se o falecido ou a família já foram atendidos neste computador, ele usa os nomes aprovados da última vez (memória da loja); senão, gera o katakana. Embaixo de cada campo aparece a leitura (“lê-se”) para conferir com o cliente. Se alguém digitar no campo japonês, o app respeita o texto e oferece <strong>Voltar ao automático</strong>. O <strong>Nome da família</strong> também é preenchido sozinho com o sobrenome do falecido; se a família for outra, basta digitar por cima.</p>
+                <p class="help-note"><strong>Preenchimento automático:</strong> ao digitar o nome em português, o app preenche o nome em japonês sozinho. O nome em japonês é gerado em katakana; a memória da loja não preenche o formulário. Embaixo de cada campo aparece a leitura (“lê-se”) para conferir com o cliente. Se alguém digitar no campo japonês, o app respeita o texto e oferece <strong>Voltar ao automático</strong>. O <strong>Nome da família</strong> também é preenchido sozinho com o sobrenome do falecido; se a família for outra, basta digitar por cima.</p>
                 <p class="help-note"><strong>Kanji escolhido pelo cliente:</strong> quando o nome tem escrita conhecida em kanji (Watanabe → 渡辺, 渡部…), o botão <strong>Tela cheia</strong> abre primeiro uma tela para o cliente tocar na escrita da família. O vendedor não precisa saber japonês: é o cliente quem reconhece. Se ele não souber, fica o katakana (“Não sei”). Com kanji, o nome segue a ordem japonesa: sobrenome primeiro (渡辺茂). Para mudar depois, use <strong>Trocar escrita</strong> embaixo do campo.</p>
                 <p class="help-note"><strong>Família vai confirmar depois:</strong> se o cliente não souber a escrita na hora, toque em <strong>A família vai confirmar depois</strong>. Fica o katakana provisório, a folha de aprovação pode ser impressa (com o aviso “provisória”) e a peça final fica bloqueada. O atendimento aparece no Histórico em <strong>Aguardando a família</strong>, com um contador laranja no ícone; quando a família responder, toque nele e em <strong>Família confirmou? Escolher agora</strong>.</p>
-                <p class="help-note"><strong>Memória da loja:</strong> é gravada sozinha sempre que a peça é impressa, salva em PDF ou exportada; a impressão de aprovação marca o registro como aprovado pelo cliente. Fica neste navegador — use <strong>Exportar/Importar memória</strong> no Histórico para ter cópia ou levar para outro computador.</p>
+                <p class="help-note"><strong>Memória da loja:</strong> guarda escolhas de kanji e pendências; é gravada sozinha sempre que a peça é impressa, salva em PDF ou exportada, mas não preenche o formulário. Fica neste navegador — use <strong>Exportar/Importar memória</strong> no Histórico para ter cópia ou levar para outro computador.</p>
                 <p class="help-note"><strong>Katakana ou kanji?</strong> Katakana é a escrita usada para nomes estrangeiros, como os brasileiros (Armando → アルマンド). Nomes e sobrenomes <strong>de origem japonesa</strong> (Yamada, Watanabe, Iwamoto) costumam ser escritos em <strong>kanji</strong> pela família: 山田家, 渡辺家, 岩本家. Nesses casos, pergunte ao cliente como a família escreve o nome; se for em kanji, peça a grafia (um documento, um Noshigami anterior) e digite com o teclado japonês do Windows (IME). A sugestão em katakana serve apenas quando a família não usa kanji. Hiragana não é usado para nomes no Noshigami.</p>
             </section>
 
@@ -1728,7 +1868,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                 <dl class="help-fields">
                     <dt>Nome do cliente</dt><dd>Identifica quem aprovou o modelo; é exigido somente para imprimir a folha de aprovação.</dd>
                     <dt>Data do termo</dt><dd>Data da aprovação, preenchida inicialmente com o dia atual.</dd>
-                    <dt>Confirmação de aceite</dt><dd>Deve ser marcada após a leitura do termo para liberar a impressão de aprovação.</dd>
+                    <dt>Confirmação de aceite</dt><dd>Deve ser marcada depois de apresentar o termo ao cliente para liberar a impressão de aprovação. No papel, o quadrado de aceite sai em branco: quem marca é o cliente, à mão, junto com a assinatura.</dd>
                 </dl>
             </section>
 
@@ -1753,7 +1893,9 @@ body[data-theme="dark"] .history-item small.timestamp {
                 <ul>
                     <li><strong>Tema:</strong> alterna entre aparência clara e escura; a arte impressa permanece branca.</li>
                     <li><strong>Histórico:</strong> guarda localmente as 10 últimas entradas salvas ou exportadas. Clique em um item para restaurá-lo.</li>
-                    <li><kbd>Tab</kbd>: próximo campo; <kbd>Ctrl + S</kbd>: salvar em PDF; <kbd>Alt + N</kbd>: novo atendimento; <kbd>Alt + H</kbd>: histórico; <kbd>Alt + T</kbd>: tela cheia; <kbd>F1</kbd>: ajuda; <kbd>Esc</kbd>: fechar painel.</li>
+                    <li><kbd>Tab</kbd>: próximo campo; <kbd>Ctrl + S</kbd>: salvar em PDF; <kbd>Alt + N</kbd>: novo atendimento; <kbd>Alt + H</kbd>: histórico; <kbd>Alt + T</kbd>: tela cheia; <kbd>F1</kbd>: ajuda; <kbd>/</kbd> ou <kbd>Ctrl + K</kbd>: buscar noshigami; <kbd>Esc</kbd>: fechar painel.</li>
+                    <li><strong>Posição dos textos:</strong> arraste na prévia — as guias rosa mostram quando o texto se alinha ao centro da folha ou a outro texto (segure <kbd>Alt</kbd> para soltar livre). Para precisão, clique no texto e digite o centro X/Y em mm. A posição vale para o PDF e para o Word.</li>
+                    <li><strong>Remover:</strong> o <strong>×</strong> em cada item do Histórico ou das pendências de kanji remove o item, após confirmação.</li>
                 </ul>
                 <p class="help-note"><strong>Privacidade:</strong> tudo funciona localmente. Nenhum dado digitado é enviado para servidores externos.</p>
             </section>
@@ -1761,6 +1903,10 @@ body[data-theme="dark"] .history-item small.timestamp {
     </div>
 
     <div class="history-panel" id="historyPanel">
+        <div class="busca-resumo" id="busca-resumo" hidden>
+            <span id="busca-resumo-texto"></span>
+            <button type="button" class="small-action" id="busca-limpar">Limpar busca</button>
+        </div>
         <div class="pendencias" id="pendencias" hidden>
             <h3>Aguardando a família</h3>
             <p class="pendencias-ajuda">Escrita em japonês ainda não confirmada. Toque para retomar.</p>
@@ -1782,8 +1928,10 @@ body[data-theme="dark"] .history-item small.timestamp {
 
     <div class="container">
         <div class="header">
-            
-            
+            <div class="header-busca" role="search">
+                <svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/></svg>
+                <input type="search" id="busca-noshigami" placeholder="Buscar noshigami…" aria-label="Buscar noshigami no histórico e nas pendências" title="Atalho: / ou Ctrl+K" autocomplete="off">
+            </div>
             <h1>Noshigami</h1>
             <p>Tenman-ya</p><div class="header-controls">
                 <!-- Ícones em SVG embutido, no lugar do Font Awesome via CDN: elimina
@@ -1908,7 +2056,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                     </select>
                     <span class="tooltip">Titulo com o falecido</span>
                 </div>
-                <p class="ime-help"><strong>Nomes em japonês:</strong> são preenchidos sozinhos a partir do nome em português — ou da memória da loja, quando a família já foi atendida. Mostre a prévia ao cliente em <strong>Tela cheia</strong> e confira a leitura (“lê-se”) com ele.</p>
+                <p class="ime-help"><strong>Nomes em japonês:</strong> são preenchidos sozinhos em katakana a partir do nome em português. Mostre a prévia ao cliente em <strong>Tela cheia</strong> e confira a leitura (“lê-se”) com ele.</p>
             </div>
         </div>
         </section>
@@ -1943,6 +2091,15 @@ body[data-theme="dark"] .history-item small.timestamp {
                 <button id="restaurar-posicoes">Restaurar Posições</button>
                 <button id="tela-cheia" title="Mostrar só o Noshigami em tela cheia (Alt+T)">Tela cheia</button>
             </div>
+            <!-- Posição exata do texto selecionado, em mm da folha de 36,5 × 16 cm.
+                 O ponto medido é o centro do bloco de texto. -->
+            <div class="painel-posicao" id="painel-posicao">
+                <span class="posicao-campo" id="posicao-campo">Clique em um texto da prévia para ajustar a posição em mm.</span>
+                <label for="posicao-x">Centro X <input type="number" id="posicao-x" step="0.1" inputmode="decimal" disabled> mm</label>
+                <label for="posicao-y">Centro Y <input type="number" id="posicao-y" step="0.1" inputmode="decimal" disabled> mm</label>
+                <button type="button" class="small-action" id="posicao-padrao" disabled>Posição padrão</button>
+                <span class="posicao-dica">Ao arrastar, as guias rosa mostram alinhamentos; segure Alt para soltar livre.</span>
+            </div>
 
             <!-- O stage é fluido; o canvas interno tem tamanho fixo (1794x787 unidades
                  de design) e é escalado por JS. Nenhuma posição depende da resolução. -->
@@ -1969,6 +2126,7 @@ body[data-theme="dark"] .history-item small.timestamp {
                         <div id="nomeFalecidoJapones-container" class="text-container draggable"><span id="nomeFalecidoJaponesPreview"></span></div>
                         <div id="relacao-container" class="text-container draggable"><span id="relacaoPreview"></span></div>
                         <div id="nomeFamiliaJapones-container" class="text-container draggable"><span id="nomeFamiliaJaponesPreview"></span></div>
+                        <div id="guias" aria-hidden="true"></div>
                     </div>
                 </div>
             </div>
@@ -2004,7 +2162,7 @@ body[data-theme="dark"] .history-item small.timestamp {
             </div>
             <label class="checkbox-label" for="aceiteTermo">
                 <input type="checkbox" id="aceiteTermo">
-                Confirmo que o cliente leu e aceitou as condições acima.
+                Apresentei o termo ao cliente (ele marca o quadrado e assina no papel impresso).
             </label>
         </section>
 
@@ -2033,16 +2191,16 @@ body[data-theme="dark"] .history-item small.timestamp {
             <p>Alterações posteriores (nome, “kanji”, etc.) terão custo adicional de R$ 2,00 por impressão, e a data de entrega poderá sofrer mudanças.</p>
             <p>O termo é válido desde a assinatura até a conclusão do pedido de Okaeshi.</p>
             <p id="print-leitura"></p>
-            <p>[X] O cliente declara que leu e aceitou as condições acima.</p>
+            <p class="print-aceite"><span class="quadro-aceite" aria-hidden="true"></span> O cliente declara que leu e aceitou as condições acima.</p>
             <div class="print-identificacao">
                 <p>Cliente: <span class="linha-preenchimento" id="print-nome-cliente"></span></p>
                 <p>Data: <span class="linha-preenchimento" id="print-data-termo"></span></p>
             </div>
-            <span class="linha-assinatura">Assinatura do cliente</span>
+            <div class="linha-assinatura">Assinatura do cliente</div>
         </section>
     </div>
 
-    <script src="script.js?v=20261005a"></script>
+    <script src="script.js?v=20261006b"></script>
 
 
 

@@ -126,6 +126,72 @@ async function testarDocx() {
     assert.ok(xml.includes('六七日忌'), 'Opção de 42 dias ausente do template exportado.');
     assert.ok(xml.includes('Sem parentesco - 亡'), 'Opção somente 亡 ausente do template exportado.');
     assert.ok(xml.includes('<w:pgSz w:w="20700" w:h="9080"'), 'Dimensão original do documento foi alterada.');
+    assert.ok(!/<w:b(?:Cs)?(\s[^>]*)?\/>/.test(xml), 'O DOCX exportado ainda tem negrito.');
+
+    // Deslocamento feito na tela vai para o Word nas duas representações.
+    const xmlTemplate = await (await JSZip.loadAsync(match[1], { base64: true })).file('word/document.xml').async('string');
+    const parado = exporter.preencherTemplateXml(xmlTemplate, dados);
+    const zerado = exporter.preencherTemplateXml(xmlTemplate, {
+        ...dados,
+        deslocamentosMm: { nomeFalecidoJapones: { dx: 0, dy: 0 } }
+    });
+    assert.equal(zerado, parado, 'Deslocamento zero alterou o DOCX.');
+    const movido = exporter.preencherTemplateXml(xmlTemplate, {
+        ...dados,
+        deslocamentosMm: { nomeFalecidoJapones: { dx: 10, dy: -2.5 } }
+    });
+    const blocoMovido = movido.match(/<mc:AlternateContent\b[\s\S]*?<\/mc:AlternateContent>/g)
+        .find(bloco => bloco.includes('アルマンド'));
+    assert.ok(blocoMovido.includes('<wp:posOffset>' + (4958715 + 360000) + '</wp:posOffset>'), 'Deslocamento horizontal em EMU incorreto.');
+    assert.ok(blocoMovido.includes('<wp:posOffset>' + (475326 - 90000) + '</wp:posOffset>'), 'Deslocamento vertical em EMU incorreto.');
+    assert.ok(blocoMovido.includes('margin-left:418.8pt'), 'Deslocamento horizontal VML incorreto.');
+    assert.ok(blocoMovido.includes('margin-top:30.36pt'), 'Deslocamento vertical VML incorreto.');
+
+    // Nome longo: a caixa vertical cresce para caber, nas duas representações.
+    const longo = exporter.preencherTemplateXml(xmlTemplate, { ...dados, nomeFalecidoJapones: 'アルマンド テステ' });
+    const blocoLongo = longo.match(/<mc:AlternateContent\b[\s\S]*?<\/mc:AlternateContent>/g)
+        .find(bloco => bloco.includes('アルマンド テステ'));
+    const alturas = [
+        Number(blocoLongo.match(/<wp:extent cx="\d+" cy="(\d+)"/)[1]),
+        Number(blocoLongo.match(/<a:xfrm\b[^>]*>[\s\S]*?<a:ext cx="\d+" cy="(\d+)"/)[1]),
+        Math.round(parseFloat(blocoLongo.match(/<v:shape\b[^>]*style="[^"]*?\bheight:([\d.]+)pt/)[1]) * 12700)
+    ];
+    assert.ok(alturas[0] > 1062842, 'Caixa do nome longo não cresceu.');
+
+    // Fontes: mensagem em Great Vibes; japonês sempre em Yuji Syuku.
+    const blocos = parado.match(/<mc:AlternateContent\b[\s\S]*?<\/mc:AlternateContent>/g);
+    const blocoMensagem = blocos.find(bloco => bloco.includes('Mensagem personalizada de teste.'));
+    assert.ok(blocoMensagem.includes('w:ascii="Great Vibes"') && !blocoMensagem.includes('Palatino'), 'Mensagem do DOCX não está em Great Vibes.');
+    for (const texto of ['アルマンド', '山田家', '初七日忌']) {
+        const bloco = blocos.find(item => item.includes(texto));
+        const fontes = bloco.match(/<w:rFonts\b[^>]*\/>/g);
+        assert.ok(fontes.every(f => /w:eastAsia="Yuji Syuku"/.test(f) && /w:ascii="Yuji Syuku"/.test(f)), `Caixa de ${texto} com fonte diferente de Yuji Syuku.`);
+    }
+
+    // Fontes incorporadas no .docx (ofuscadas como o Word exige).
+    const contexto = {};
+    new Function('window', fs.readFileSync(path.join(__dirname, '..', 'assets', 'fontes-docx.js'), 'utf8'))(contexto);
+    const fontes = contexto.NOSHIGAMI_FONTES_DOCX;
+    assert.ok(fontes && fontes['Yuji Syuku'] && fontes['Great Vibes'], 'assets/fontes-docx.js sem as duas fontes.');
+    const comFontes = await JSZip.loadAsync(await exporter.gerarDocx(JSZip, match[1], dados, 'nodebuffer', fontes));
+    const tabelaFontes = await comFontes.file('word/fontTable.xml').async('string');
+    const relsFontes = await comFontes.file('word/_rels/fontTable.xml.rels').async('string');
+    const tiposConteudo = await comFontes.file('[Content_Types].xml').async('string');
+    assert.ok(tiposConteudo.includes('Extension="odttf"'), 'Tipo odttf ausente.');
+    for (const nome of ['Yuji Syuku', 'Great Vibes']) {
+        const entrada = tabelaFontes.match(new RegExp(`<w:font w:name="${nome}">[\\s\\S]*?</w:font>`));
+        assert.ok(entrada, `Fonte ${nome} ausente da tabela de fontes.`);
+        const [, id, guid] = entrada[0].match(/<w:embedRegular r:id="([^"]+)" w:fontKey="([^"]+)"/);
+        const alvo = relsFontes.match(new RegExp(`Id="${id}"[^>]*Target="([^"]+)"`))[1];
+        const ofuscada = await comFontes.file('word/' + alvo).async('uint8array');
+        const fonte = exporter.ofuscarFonte(ofuscada, guid); // XOR é reversível
+        assert.equal(Buffer.from(fonte.slice(0, 4)).toString('hex'), '00010000', `${nome} incorporada não é TrueType válida.`);
+        const cobertos = exporter.caracteresComContorno(fonte);
+        const usados = nome === 'Yuji Syuku' ? 'アルマンド山田家亡初七日忌' : 'Mensagempersonalizad';
+        for (const c of usados) assert.ok(cobertos.has(c.codePointAt(0)), `${nome} incorporada sem o caractere ${c}.`);
+        if (nome === 'Yuji Syuku') assert.ok(!cobertos.has('海'.codePointAt(0)), 'Yuji Syuku incorporada não foi reduzida.');
+    }
+    assert.ok(alturas.every(altura => Math.abs(altura - alturas[0]) < 200), `Alturas divergentes: ${alturas}`);
     return destino;
 }
 

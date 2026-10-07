@@ -94,7 +94,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const DESIGN_W = 1794;
     const DESIGN_H = 787;
-    const LARGURA_EXPORTACAO = 3104;
+    // Folha final: 365 × 160 mm. A mesma escala vale nos dois eixos; o design
+    // (787 px) tem 0,12 mm a mais de altura, que fica fora da folha exportada.
+    const FOLHA_W_MM = 365;
+    const FOLHA_H_MM = 160;
+    const MM_POR_PX = FOLHA_W_MM / DESIGN_W;
+    const FOLHA_H_PX = FOLHA_H_MM / MM_POR_PX;
+    // 300 dpi na largura da folha (365 mm → 4311 px).
+    const LARGURA_EXPORTACAO = Math.round(FOLHA_W_MM / 25.4 * 300);
     const MAX_HISTORY = 10;
     const REGEX_VERTICAL_EM_PE = /[⺀-鿿　-〿＀-￯]/;
     const POSICOES_PADRAO = Object.freeze({
@@ -140,6 +147,7 @@ document.addEventListener('DOMContentLoaded', function () {
             elemento.style.left = posicao.left + 'px';
             elemento.style.top = posicao.top + 'px';
         });
+        atualizarPainelPosicao();
     }
 
     function atualizarEscala() {
@@ -212,6 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
         botoes.alternarMensagem.textContent = elementos.mostrarMensagem.checked
             ? 'Ocultar Mensagem'
             : 'Mostrar Mensagem';
+        atualizarPainelPosicao();
         atualizarFluxo();
     }
 
@@ -276,18 +285,103 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
+    /* Busca de noshigamis (campo no cabeçalho): filtra o histórico e as
+       pendências por nomes em português ou japonês e pelo período. */
+    const campoBusca = document.getElementById('busca-noshigami');
+    let termoBusca = '';
+
+    function textoBusca(valor) {
+        return String(valor || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function correspondeBusca(item) {
+        if (!termoBusca) return true;
+        const campos = [
+            item.nomeFalecido, item.nomeFamilia, item.nomeFalecidoJapones, item.nomeFamiliaJapones,
+            item.periodonumeral, item.periodo, ...(item.periodos || [])
+        ];
+        return textoBusca(campos.join(' ')).includes(termoBusca);
+    }
+
+    function atualizarResumoBusca() {
+        const resumo = document.getElementById('busca-resumo');
+        if (!resumo) return;
+        resumo.hidden = !termoBusca;
+        document.getElementById('busca-resumo-texto').textContent = termoBusca ? `Busca: “${campoBusca.value.trim()}”` : '';
+    }
+
+    function aplicarBusca(valor) {
+        termoBusca = textoBusca(valor);
+        if (termoBusca && !historyPanel.classList.contains('open')) historyPanel.classList.add('open');
+        atualizarResumoBusca();
+        updateHistoryDisplay();
+        atualizarPendencias();
+    }
+
+    function limparBusca() {
+        campoBusca.value = '';
+        aplicarBusca('');
+    }
+
+    if (campoBusca) {
+        campoBusca.addEventListener('input', () => aplicarBusca(campoBusca.value));
+        campoBusca.addEventListener('keydown', function (evento) {
+            if (evento.key === 'Escape') {
+                evento.stopPropagation();
+                if (campoBusca.value) limparBusca();
+                else campoBusca.blur();
+            }
+            if (evento.key === 'Enter') {
+                // Enter abre o primeiro resultado (pendência ou histórico).
+                const primeiro = historyPanel.querySelector('.pendencia-item, .history-item');
+                if (primeiro) primeiro.click();
+            }
+        });
+        document.getElementById('busca-limpar').addEventListener('click', limparBusca);
+    }
+
+    function removerDoHistorico(id) {
+        if (!window.confirm('Remover este noshigami do histórico?')) return;
+        historyData = historyData.filter(item => item.id !== id);
+        try {
+            localStorage.setItem('noshigamiHistory', JSON.stringify(historyData));
+        } catch (erro) {
+            console.warn('Não foi possível salvar o histórico:', erro);
+        }
+        updateHistoryDisplay();
+        showFeedback('Noshigami removido do histórico.', 'success');
+    }
+
+    function itemRemovivel(conteudo, rotulo, aoRemover) {
+        const caixa = document.createElement('div');
+        caixa.className = 'item-removivel';
+        const remover = document.createElement('button');
+        remover.type = 'button';
+        remover.className = 'remover-item';
+        remover.textContent = '×';
+        remover.title = rotulo;
+        remover.setAttribute('aria-label', rotulo);
+        remover.addEventListener('click', function (evento) {
+            evento.stopPropagation();
+            aoRemover();
+        });
+        caixa.append(conteudo, remover);
+        return caixa;
+    }
+
     function updateHistoryDisplay() {
         historyList.replaceChildren();
-        if (!historyData.length) {
+        const itens = historyData.filter(correspondeBusca);
+        if (!itens.length) {
             const vazio = document.createElement('p');
-            vazio.textContent = 'Nenhum item no histórico.';
+            vazio.textContent = termoBusca ? 'Nenhum noshigami encontrado.' : 'Nenhum item no histórico.';
             vazio.style.textAlign = 'center';
             vazio.style.color = '#888';
             historyList.appendChild(vazio);
             return;
         }
 
-        historyData.slice().reverse().forEach(item => {
+        itens.slice().reverse().forEach(item => {
             const entrada = document.createElement('button');
             entrada.type = 'button';
             entrada.className = 'history-item';
@@ -300,7 +394,7 @@ document.addEventListener('DOMContentLoaded', function () {
             data.textContent = `Salvo em: ${new Date(item.timestamp).toLocaleString('pt-BR')}`;
             entrada.append(nome, document.createElement('br'), resumo, document.createElement('br'), data);
             entrada.addEventListener('click', () => loadFromHistory(item.id));
-            historyList.appendChild(entrada);
+            historyList.appendChild(itemRemovivel(entrada, 'Remover do histórico', () => removerDoHistorico(item.id)));
         });
     }
 
@@ -367,6 +461,179 @@ document.addEventListener('DOMContentLoaded', function () {
         return valido;
     }
 
+    /* =======================================================================
+       POSIÇÃO DOS TEXTOS: arrastar com linhas guia + ajuste exato em mm
+       ======================================================================= */
+    const NOMES_BLOCOS = Object.freeze({
+        'relacao-container': 'Título (亡 / parentesco)',
+        'missa-container': 'Período da missa',
+        'nomeFalecidoJapones-container': 'Nome do falecido',
+        'nomeFamiliaJapones-container': 'Nome da família',
+        'texto-fixo': 'Mensagem'
+    });
+    // Bloco da prévia → caixa de texto correspondente no modelo Word.
+    const CAMPOS_DOCX = Object.freeze({
+        'relacao-container': 'relacao',
+        'missa-container': 'periodoJapones',
+        'nomeFalecidoJapones-container': 'nomeFalecidoJapones',
+        'nomeFamiliaJapones-container': 'nomeFamiliaJapones',
+        'texto-fixo': 'mensagem'
+    });
+    const GUIA_DISTANCIA_TELA = 6; // px na tela para "grudar" na guia
+    const MARGEM_ARRASTE = 20;
+    const painelPosicao = {
+        campo: document.getElementById('posicao-campo'),
+        x: document.getElementById('posicao-x'),
+        y: document.getElementById('posicao-y'),
+        padrao: document.getElementById('posicao-padrao')
+    };
+    const camadaGuias = document.getElementById('guias');
+    let blocoSelecionado = null;
+
+    function blocoVisivel(elemento) {
+        return elemento.offsetWidth > 0 && getComputedStyle(elemento).display !== 'none';
+    }
+
+    function limitarPosicao(elemento, left, top) {
+        return {
+            left: Math.min(Math.max(left, -MARGEM_ARRASTE), DESIGN_W - elemento.offsetWidth + MARGEM_ARRASTE),
+            top: Math.min(Math.max(top, -MARGEM_ARRASTE), DESIGN_H - elemento.offsetHeight + MARGEM_ARRASTE)
+        };
+    }
+
+    // Deslocamento de cada bloco em relação à posição padrão, em mm (com
+    // centésimos), para o Word mover as caixas do modelo na mesma medida.
+    function deslocamentosMm() {
+        const resultado = {};
+        Object.entries(CAMPOS_DOCX).forEach(([id, campo]) => {
+            const elemento = document.getElementById(id);
+            const padrao = POSICOES_PADRAO[id];
+            if (!elemento || !padrao) return;
+            resultado[campo] = {
+                dx: Math.round(((parseFloat(elemento.style.left) || 0) - padrao.left) * MM_POR_PX * 100) / 100,
+                dy: Math.round(((parseFloat(elemento.style.top) || 0) - padrao.top) * MM_POR_PX * 100) / 100
+            };
+        });
+        return resultado;
+    }
+
+    // "exceto": campo que o usuário está digitando e não deve ser reescrito.
+    function atualizarPainelPosicao(exceto) {
+        if (!painelPosicao.campo) return;
+        const ativo = Boolean(blocoSelecionado);
+        painelPosicao.x.disabled = !ativo;
+        painelPosicao.y.disabled = !ativo;
+        painelPosicao.padrao.disabled = !ativo;
+        if (!ativo) {
+            painelPosicao.campo.textContent = 'Clique em um texto da prévia para ajustar a posição em mm.';
+            painelPosicao.x.value = '';
+            painelPosicao.y.value = '';
+            return;
+        }
+        const left = parseFloat(blocoSelecionado.style.left) || 0;
+        const top = parseFloat(blocoSelecionado.style.top) || 0;
+        painelPosicao.campo.textContent = NOMES_BLOCOS[blocoSelecionado.id] || 'Texto';
+        if (exceto !== painelPosicao.x) {
+            painelPosicao.x.value = ((left + blocoSelecionado.offsetWidth / 2) * MM_POR_PX).toFixed(1);
+        }
+        if (exceto !== painelPosicao.y) {
+            painelPosicao.y.value = ((top + blocoSelecionado.offsetHeight / 2) * MM_POR_PX).toFixed(1);
+        }
+    }
+
+    function selecionarBloco(elemento) {
+        if (blocoSelecionado && blocoSelecionado !== elemento) blocoSelecionado.classList.remove('selecionado');
+        blocoSelecionado = elemento;
+        if (elemento) elemento.classList.add('selecionado');
+        atualizarPainelPosicao();
+    }
+
+    function posicionarPorMm(campoAlterado) {
+        if (!blocoSelecionado) return;
+        const x = parseFloat(String(painelPosicao.x.value).replace(',', '.'));
+        const y = parseFloat(String(painelPosicao.y.value).replace(',', '.'));
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        const posicao = limitarPosicao(
+            blocoSelecionado,
+            x / MM_POR_PX - blocoSelecionado.offsetWidth / 2,
+            y / MM_POR_PX - blocoSelecionado.offsetHeight / 2
+        );
+        blocoSelecionado.style.left = posicao.left + 'px';
+        blocoSelecionado.style.top = posicao.top + 'px';
+        atualizarPainelPosicao(campoAlterado);
+    }
+
+    if (painelPosicao.x) {
+        painelPosicao.x.addEventListener('input', () => posicionarPorMm(painelPosicao.x));
+        painelPosicao.y.addEventListener('input', () => posicionarPorMm(painelPosicao.y));
+        [painelPosicao.x, painelPosicao.y].forEach(campo => campo.addEventListener('change', () => atualizarPainelPosicao()));
+        painelPosicao.padrao.addEventListener('click', function () {
+            if (!blocoSelecionado) return;
+            const padrao = POSICOES_PADRAO[blocoSelecionado.id];
+            if (!padrao) return;
+            blocoSelecionado.style.left = padrao.left + 'px';
+            blocoSelecionado.style.top = padrao.top + 'px';
+            atualizarPainelPosicao();
+        });
+    }
+
+    function limparGuias() {
+        if (camadaGuias) camadaGuias.replaceChildren();
+    }
+
+    function desenharGuias(verticais, horizontais) {
+        if (!camadaGuias) return;
+        limparGuias();
+        const espessura = Math.max(1, 1.5 / (escalaAtual || 1)) + 'px';
+        verticais.forEach(x => {
+            const linha = document.createElement('div');
+            linha.className = 'guia guia-v';
+            linha.style.left = x + 'px';
+            linha.style.borderLeftWidth = espessura;
+            camadaGuias.append(linha);
+        });
+        horizontais.forEach(y => {
+            const linha = document.createElement('div');
+            linha.className = 'guia guia-h';
+            linha.style.top = y + 'px';
+            linha.style.borderTopWidth = espessura;
+            camadaGuias.append(linha);
+        });
+    }
+
+    // Procura o alinhamento mais próximo em um eixo. "proprios" são as
+    // posições do bloco (início, centro, fim); "alvos", as da página e dos
+    // outros blocos. Devolve o ajuste a aplicar e as guias a desenhar.
+    function melhorAlinhamento(proprios, alvos, limite) {
+        let ajuste = null;
+        alvos.forEach(alvo => proprios.forEach(proprio => {
+            const diferenca = alvo - proprio;
+            if (Math.abs(diferenca) <= limite && (ajuste === null || Math.abs(diferenca) < Math.abs(ajuste))) ajuste = diferenca;
+        }));
+        if (ajuste === null) return { ajuste: 0, guias: [] };
+        const guias = alvos.filter(alvo => proprios.some(proprio => Math.abs(alvo - (proprio + ajuste)) < 0.5));
+        return { ajuste: ajuste, guias: Array.from(new Set(guias)) };
+    }
+
+    function aplicarGuias(elemento, left, top) {
+        const largura = elemento.offsetWidth;
+        const altura = elemento.offsetHeight;
+        const alvosX = [DESIGN_W / 2];
+        const alvosY = [FOLHA_H_PX / 2];
+        canvas.querySelectorAll('.draggable').forEach(outro => {
+            if (outro === elemento || !blocoVisivel(outro)) return;
+            const outroLeft = parseFloat(outro.style.left) || 0;
+            const outroTop = parseFloat(outro.style.top) || 0;
+            alvosX.push(outroLeft, outroLeft + outro.offsetWidth / 2, outroLeft + outro.offsetWidth);
+            alvosY.push(outroTop, outroTop + outro.offsetHeight / 2, outroTop + outro.offsetHeight);
+        });
+        const limite = GUIA_DISTANCIA_TELA / (escalaAtual || 1);
+        const eixoX = melhorAlinhamento([left, left + largura / 2, left + largura], alvosX, limite);
+        const eixoY = melhorAlinhamento([top, top + altura / 2, top + altura], alvosY, limite);
+        desenharGuias(eixoX.guias, eixoY.guias);
+        return { left: left + eixoX.ajuste, top: top + eixoY.ajuste };
+    }
+
     function makeDraggable(element) {
         let inicioX = 0;
         let inicioY = 0;
@@ -384,18 +651,27 @@ document.addEventListener('DOMContentLoaded', function () {
             origemTop = parseFloat(element.style.top) || 0;
             element.setPointerCapture(evento.pointerId);
             element.classList.add('dragging');
+            selecionarBloco(element);
         });
         element.addEventListener('pointermove', function (evento) {
             if (!arrastando) return;
             evento.preventDefault();
             const escala = escalaAtual || 1;
-            const deltaX = (evento.clientX - inicioX) / escala;
-            const deltaY = (evento.clientY - inicioY) / escala;
-            const margem = 20;
-            const novoLeft = Math.min(Math.max(origemLeft + deltaX, -margem), DESIGN_W - element.offsetWidth + margem);
-            const novoTop = Math.min(Math.max(origemTop + deltaY, -margem), DESIGN_H - element.offsetHeight + margem);
-            element.style.left = novoLeft + 'px';
-            element.style.top = novoTop + 'px';
+            let posicao = limitarPosicao(
+                element,
+                origemLeft + (evento.clientX - inicioX) / escala,
+                origemTop + (evento.clientY - inicioY) / escala
+            );
+            // Alt solta o texto livre, sem grudar nas guias.
+            if (evento.altKey) {
+                limparGuias();
+            } else {
+                const alinhada = aplicarGuias(element, posicao.left, posicao.top);
+                posicao = limitarPosicao(element, alinhada.left, alinhada.top);
+            }
+            element.style.left = posicao.left + 'px';
+            element.style.top = posicao.top + 'px';
+            atualizarPainelPosicao();
         });
         function encerrar(evento) {
             if (!arrastando) return;
@@ -404,6 +680,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 element.releasePointerCapture(evento.pointerId);
             }
             element.classList.remove('dragging');
+            limparGuias();
         }
         element.addEventListener('pointerup', encerrar);
         element.addEventListener('pointercancel', encerrar);
@@ -436,13 +713,31 @@ document.addEventListener('DOMContentLoaded', function () {
         const vertical = estilo.writingMode.indexOf('vertical') === 0;
         const corpo = parseFloat(estilo.fontSize);
         ctx.fillStyle = estilo.color;
-        ctx.font = `${estilo.fontStyle} ${estilo.fontWeight} ${corpo}px ${estilo.fontFamily}`;
+        // A peça exportada sai sem negrito: a Yuji Syuku só tem o peso
+        // regular, e o negrito da prévia é sintético.
+        ctx.font = `${estilo.fontStyle} normal ${corpo}px ${estilo.fontFamily}`;
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
         for (const { ch, caixa } of caracteresDe(elemento)) {
             const cx = (caixa.left + caixa.width / 2 - caixaCanvas.left) / escalaLayout;
             const cy = (caixa.top + caixa.height / 2 - caixaCanvas.top) / escalaLayout;
-            if (vertical && !REGEX_VERTICAL_EM_PE.test(ch)) {
+            if (!vertical) {
+                // Texto horizontal: a caixa do caractere é a área de conteúdo
+                // da fonte (ascendente + descendente); a linha de base fica a
+                // "ascendente" do topo dessa área, como no navegador.
+                const medida = ctx.measureText(ch);
+                const subida = medida.fontBoundingBoxAscent;
+                const descida = medida.fontBoundingBoxDescent;
+                ctx.textBaseline = 'alphabetic';
+                if (Number.isFinite(subida) && Number.isFinite(descida)) {
+                    ctx.fillText(ch, cx, cy - (subida + descida) / 2 + subida);
+                } else {
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(ch, cx, cy);
+                }
+                continue;
+            }
+            ctx.textBaseline = 'middle';
+            if (!REGEX_VERTICAL_EM_PE.test(ch)) {
                 ctx.save();
                 ctx.translate(cx, cy);
                 ctx.rotate(Math.PI / 2);
@@ -456,14 +751,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function montarImagem(escala) {
         const tela = document.createElement('canvas');
+        // Proporção exata da folha (365 × 160 mm), sem esticar a imagem.
         tela.width = Math.round(DESIGN_W * escala);
-        tela.height = Math.round(DESIGN_H * escala);
+        tela.height = Math.round(FOLHA_H_PX * escala);
         const ctx = tela.getContext('2d');
         ctx.scale(escala, escala);
         ctx.drawImage(document.getElementById('imagemPreview'), 0, 0, DESIGN_W, DESIGN_H);
-        const caixaCanvas = canvas.getBoundingClientRect();
-        const escalaLayout = caixaCanvas.width / DESIGN_W;
-        canvas.querySelectorAll('.draggable').forEach(elemento => desenharBloco(ctx, elemento, caixaCanvas, escalaLayout));
+        // Mede os caracteres na escala 1 do design: medir na prévia reduzida
+        // multiplicaria o erro de arredondamento do navegador.
+        const transformAnterior = canvas.style.transform;
+        canvas.style.transform = 'none';
+        try {
+            const caixaCanvas = canvas.getBoundingClientRect();
+            const escalaLayout = caixaCanvas.width / DESIGN_W;
+            canvas.querySelectorAll('.draggable').forEach(elemento => desenharBloco(ctx, elemento, caixaCanvas, escalaLayout));
+        } finally {
+            canvas.style.transform = transformAnterior;
+        }
         return tela;
     }
 
@@ -510,6 +814,40 @@ document.addEventListener('DOMContentLoaded', function () {
         showFeedback('Dados exportados para TXT.', 'success');
     }
 
+    // Fontes que vão dentro do .docx (assets/fontes-docx.js, ~3,5 MB): só
+    // são carregadas na primeira exportação para Word. Usa <script> e não
+    // fetch para funcionar também com o index.html aberto direto do disco.
+    let carregandoFontesDocx = null;
+    function carregarFontesDocx() {
+        if (window.NOSHIGAMI_FONTES_DOCX) return Promise.resolve(window.NOSHIGAMI_FONTES_DOCX);
+        if (!carregandoFontesDocx) {
+            carregandoFontesDocx = new Promise((resolve, reject) => {
+                const proprio = document.querySelector('script[src*="script.js"]');
+                const versao = proprio && (proprio.getAttribute('src').match(/\?v=[\w-]+/) || [''])[0];
+                const script = document.createElement('script');
+                script.src = 'assets/fontes-docx.js' + (versao || '');
+                script.onload = () => window.NOSHIGAMI_FONTES_DOCX
+                    ? resolve(window.NOSHIGAMI_FONTES_DOCX)
+                    : reject(new Error('Fontes do Word vazias.'));
+                script.onerror = () => reject(new Error('Fontes do Word não carregaram.'));
+                document.head.appendChild(script);
+            }).catch(erro => {
+                carregandoFontesDocx = null;
+                throw erro;
+            });
+        }
+        return carregandoFontesDocx;
+    }
+
+    // Garante Yuji Syuku e Great Vibes prontas antes de desenhar a peça.
+    function carregarFontesDaPeca() {
+        if (!document.fonts || !document.fonts.load) return Promise.resolve();
+        return Promise.all([
+            document.fonts.load('40px "Yuji Syuku"', '亡家'),
+            document.fonts.load('34px "Great Vibes"', 'Missa')
+        ]).then(() => document.fonts.ready);
+    }
+
     async function exportarDocx() {
         if (!validateForm()) {
             showFeedback('Preencha os campos obrigatórios antes de exportar para Word.', 'error');
@@ -519,14 +857,22 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             if (!window.NoshigamiDocx) throw new Error('Módulo de exportação DOCX indisponível.');
             const dados = dadosAtuais();
+            let fontes = null;
+            try {
+                fontes = await carregarFontesDocx();
+            } catch (erro) {
+                console.warn('Word exportado sem fontes incorporadas:', erro);
+                showFeedback('Aviso: as fontes não puderam ser incorporadas; o Word usará as instaladas no computador.', 'info', 6000);
+            }
             const blob = await window.NoshigamiDocx.gerarDocx(window.JSZip, window.NOSHIGAMI_DOCX_TEMPLATE, {
                 nomeFalecidoJapones: dados.nomeFalecidoJapones,
                 nomeFamiliaJapones: dados.nomeFamiliaJapones,
                 relacao: dados.relacao,
                 periodoJapones: dados.periodo,
                 mensagem: dados.mensagem,
-                mostrarMensagem: dados.mostrarMensagem
-            }, 'blob');
+                mostrarMensagem: dados.mostrarMensagem,
+                deslocamentosMm: deslocamentosMm()
+            }, 'blob', fontes);
             baixarBlob(blob, nomeDoArquivo('docx'));
             saveToHistory();
             showFeedback('Documento Word editável exportado.', 'success');
@@ -581,7 +927,7 @@ document.addEventListener('DOMContentLoaded', function () {
         registrarNaMemoria(modo === 'aprovacao');
         showLoading();
         try {
-            await document.fonts.ready;
+            await carregarFontesDaPeca();
             const tela = montarImagem(LARGURA_EXPORTACAO / DESIGN_W);
             elementos.printImagem.src = tela.toDataURL('image/png');
             if (elementos.printImagem.decode) await elementos.printImagem.decode();
@@ -617,10 +963,9 @@ document.addEventListener('DOMContentLoaded', function () {
        NOMES EM JAPONÊS AUTOMÁTICOS + MEMÓRIA DA LOJA
        -----------------------------------------------------------------------
        Quem atende no balcão não sabe japonês. Por isso o vendedor só digita em
-       português e o app preenche os campos japoneses sozinho, nesta ordem:
-         1. memória da loja: o que a família já aprovou em atendimento anterior
-            (as missas se repetem: 7º dia, 49º dia, 1 ano, 3 anos...);
-         2. katakana gerado pelo conversor local.
+       português e o app preenche os campos japoneses com o katakana gerado
+       pelo conversor local. A memória da loja não preenche o formulário: ela
+       guarda escolhas de kanji e pendências da família.
        Se alguém digitar no campo japonês, o texto é respeitado ("manual") até
        que se clique em "Voltar ao automático". A memória é gravada sozinha ao
        imprimir, salvar em PDF ou exportar; a impressão de aprovação marca o
@@ -636,8 +981,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const origemJapones = { nomeFalecidoJapones: 'auto', nomeFamiliaJapones: 'auto' };
     const registroUsado = { nomeFalecidoJapones: null, nomeFamiliaJapones: null };
     let memoria = carregarMemoria();
-    let ultimoRegistroAvisado = '';
-
+    
     function normalizarNome(valor) {
         return String(valor || '')
             .normalize('NFD')
@@ -666,15 +1010,16 @@ document.addEventListener('DOMContentLoaded', function () {
        ninguém precisar lembrar delas. */
     function atualizarPendencias() {
         const pendentes = memoria.filter(item => item.pendente).reverse();
+        const visiveis = pendentes.filter(correspondeBusca);
         const badge = document.getElementById('badge-pendencias');
         const bloco = document.getElementById('pendencias');
         const lista = document.getElementById('lista-pendencias');
         if (!badge || !bloco || !lista) return;
         badge.hidden = !pendentes.length;
         badge.textContent = String(pendentes.length);
-        bloco.hidden = !pendentes.length;
+        bloco.hidden = !visiveis.length;
         lista.textContent = '';
-        pendentes.forEach(item => {
+        visiveis.forEach(item => {
             const botao = document.createElement('button');
             botao.type = 'button';
             botao.className = 'pendencia-item';
@@ -683,19 +1028,47 @@ document.addEventListener('DOMContentLoaded', function () {
             quando.textContent = `Aguardando desde ${dataCurta(item.pendenteDesde || item.atualizadoEm)}`;
             botao.append(quando);
             botao.addEventListener('click', () => retomarPendencia(item));
-            lista.append(botao);
+            lista.append(itemRemovivel(botao, 'Remover pendência', () => removerPendencia(item)));
         });
+    }
+
+    // Tira o atendimento da lista de espera. Registro que nunca foi aprovado
+    // sai da memória; aprovado antes, só perde a marca de pendente.
+    function removerPendencia(item) {
+        if (!window.confirm(`Remover a pendência de kanji de ${item.nomeFalecido}?`)) return;
+        const indice = memoria.indexOf(item);
+        if (indice >= 0) {
+            if (item.aprovado) {
+                item.pendente = false;
+                item.pendenteDesde = '';
+            } else {
+                memoria.splice(indice, 1);
+            }
+        }
+        // Se esse atendimento está aberto, a escrita atual fica como digitada
+        // e a peça final deixa de ficar bloqueada.
+        if (normalizarNome(elementos.nomeFalecido.value) === normalizarNome(item.nomeFalecido)) {
+            Object.keys(CAMPOS_JAPONESES).forEach(campo => {
+                if (origemJapones[campo] !== 'pendente') return;
+                origemJapones[campo] = 'manual';
+                registroUsado[campo] = null;
+            });
+        }
+        gravarMemoria();
+        updatePreview();
+        showFeedback('Pendência de kanji removida.', 'success');
     }
 
     function retomarPendencia(item) {
         elementos.nomeFalecido.value = item.nomeFalecido;
         elementos.nomeFamilia.value = item.nomeFamilia || '';
         familiaAutomatica = false;
-        Object.keys(CAMPOS_JAPONESES).forEach(campo => {
-            origemJapones[campo] = 'auto';
-            registroUsado[campo] = null;
+        Object.entries(CAMPOS_JAPONESES).forEach(([campo, config]) => {
+            const valor = item[config.memoria] || '';
+            elementos[campo].value = valor || katakanaAutomatico(elementos[config.portugues].value);
+            origemJapones[campo] = valor ? 'pendente' : 'auto';
+            registroUsado[campo] = valor ? item : null;
         });
-        preencherJapones();
         // É o mesmo pedido: o período da missa volta junto.
         const periodo = (item.periodos || [])[(item.periodos || []).length - 1];
         if (periodo) {
@@ -761,35 +1134,6 @@ document.addEventListener('DOMContentLoaded', function () {
         gravarMemoria();
     }
 
-    // Atendimento anterior do mesmo falecido. Com a família digitada, ela
-    // precisa bater; sem ela, vale o atendimento mais recente.
-    function buscarFalecido() {
-        const falecido = normalizarNome(elementos.nomeFalecido.value);
-        if (falecido.length < 3) return null;
-        // Família derivada do sobrenome não serve de filtro: a família do
-        // registro pode ser outra (ex.: nora com o sobrenome do marido).
-        const familia = familiaAutomatica ? '' : normalizarNome(elementos.nomeFamilia.value);
-        for (let i = memoria.length - 1; i >= 0; i -= 1) {
-            const item = memoria[i];
-            if (normalizarNome(item.nomeFalecido) !== falecido) continue;
-            if (familia && normalizarNome(item.nomeFamilia) !== familia) continue;
-            return item;
-        }
-        return null;
-    }
-
-    // A família pode ter sido atendida por outro falecido: o nome dela em
-    // japonês (às vezes em kanji, como 山田) continua valendo.
-    function buscarFamilia() {
-        const familia = normalizarNome(elementos.nomeFamilia.value);
-        if (familia.length < 2) return null;
-        for (let i = memoria.length - 1; i >= 0; i -= 1) {
-            const item = memoria[i];
-            if (normalizarNome(item.nomeFamilia) === familia && item.nomeFamiliaJapones) return item;
-        }
-        return null;
-    }
-
     function katakanaAutomatico(valor) {
         if (!valor.trim() || !window.NoshigamiKatakana) return '';
         try {
@@ -816,44 +1160,16 @@ document.addEventListener('DOMContentLoaded', function () {
     /* alterados: campos em português que acabaram de mudar. Um nome
        escolhido pelo cliente só é refeito se o nome em português dele mudou. */
     function preencherJapones(alterados) {
-        const falecido = buscarFalecido();
-        if (falecido) {
-            // Mesma pessoa digitada sem capricho ("shigeru watanabe"): usa a grafia guardada.
-            if (elementos.nomeFalecido.value.trim() !== falecido.nomeFalecido) elementos.nomeFalecido.value = falecido.nomeFalecido;
-            if (falecido.nomeFamilia && (familiaAutomatica || !elementos.nomeFamilia.value.trim())) {
-                elementos.nomeFamilia.value = falecido.nomeFamilia;
-            }
-            // O parentesco é do falecido: só troca se ainda estiver no padrão.
-            if (elementos.relacao.value === '亡' && falecido.relacao != null) elementos.relacao.value = falecido.relacao;
-        }
-        const familia = falecido && falecido.nomeFamiliaJapones ? falecido : buscarFamilia();
-        const registros = { nomeFalecidoJapones: falecido, nomeFamiliaJapones: familia };
-
+        // A memória da loja não preenche mais o formulário: ela só guarda
+        // escolhas e pendências. Os campos automáticos usam o katakana.
         Object.entries(CAMPOS_JAPONESES).forEach(([campo, config]) => {
             if (origemJapones[campo] === 'manual') return;
-            const decidido = origemJapones[campo] === 'cliente' || origemJapones[campo] === 'pendente';
-            if (decidido && alterados && !alterados.includes(config.portugues)) return;
-            const registro = registros[campo];
-            if (registro && registro[config.memoria]) {
-                elementos[campo].value = registro[config.memoria];
-                // Registro salvo como pendente continua pendente até a família confirmar.
-                origemJapones[campo] = registro.pendente ? 'pendente' : 'memoria';
-                registroUsado[campo] = registro;
-            } else {
-                elementos[campo].value = katakanaAutomatico(elementos[config.portugues].value);
-                origemJapones[campo] = 'auto';
-                registroUsado[campo] = null;
-            }
+            const decidido = ['cliente', 'pendente', 'memoria'].includes(origemJapones[campo]);
+            if (decidido && (!alterados || !alterados.includes(config.portugues))) return;
+            elementos[campo].value = katakanaAutomatico(elementos[config.portugues].value);
+            origemJapones[campo] = 'auto';
+            registroUsado[campo] = null;
         });
-
-        const encontrado = falecido || familia;
-        const chaveAviso = encontrado ? normalizarNome(encontrado.nomeFalecido) + '|' + normalizarNome(encontrado.nomeFamilia) : '';
-        if (encontrado && chaveAviso !== ultimoRegistroAvisado) {
-            showFeedback(falecido
-                ? 'Atendimento anterior encontrado: nomes em japonês preenchidos da memória da loja.'
-                : 'Família já atendida: nome da família em japonês preenchido da memória da loja.', 'success', 4500);
-        }
-        ultimoRegistroAvisado = chaveAviso;
     }
 
     /* Leitura em sílabas para quem não lê japonês conferir pelo som:
@@ -1310,7 +1626,6 @@ document.addEventListener('DOMContentLoaded', function () {
             origemJapones[campo] = 'auto';
             registroUsado[campo] = null;
         });
-        ultimoRegistroAvisado = '';
         familiaAutomatica = true;
         document.querySelectorAll('.error-field').forEach(campo => campo.classList.remove('error-field'));
         aplicarPosicoesPadrao();
@@ -1399,6 +1714,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (evento.altKey && !evento.ctrlKey && evento.code === 'KeyT') {
             evento.preventDefault();
             alternarTelaCheia();
+        }
+        // "/" (fora de campos de texto) ou Ctrl+K: vai para a busca.
+        const digitando = evento.target.closest && evento.target.closest('input, textarea, select, [contenteditable="true"]');
+        if (campoBusca && ((evento.key === '/' && !digitando && !evento.ctrlKey && !evento.altKey) ||
+            (evento.ctrlKey && !evento.altKey && evento.key.toLowerCase() === 'k'))) {
+            evento.preventDefault();
+            campoBusca.focus();
+            campoBusca.select();
         }
         if (evento.key === 'F1') {
             evento.preventDefault();
